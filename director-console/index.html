@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+    <title>Film Space Lite</title>
+    <link rel="stylesheet" href="/app/director.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/three.module.js",
+          "three/addons/postprocessing/Pass.js": "/vendor/three/postprocessing/Pass.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app-shell" id="appShell" aria-busy="true">
+      <header class="topbar">
+        <div class="project-switcher">
+          <label class="sr-only" for="projectSelect">当前项目</label>
+          <select id="projectSelect" aria-label="当前项目"></select>
+          <button id="newProject" class="icon-text-button" type="button" title="新建项目">
+            <span aria-hidden="true">＋</span><span>新建</span>
+          </button>
+          <button id="manageProjectsLite" class="icon-text-button" type="button">项目管理</button>
+          <span id="projectState" class="save-state" role="status">载入中</span>
+        </div>
+
+        <div id="transportCluster" class="transport" aria-label="播放控制">
+          <button id="resetPlayback" class="transport-button reset-transport-button" type="button" title="重置（R）" aria-label="重置" aria-keyshortcuts="R"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+          <button id="playPlayback" class="transport-button transport-primary" type="button" title="播放" aria-label="播放"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/></svg></button>
+          <button id="pausePlayback" class="transport-button" type="button" title="暂停" aria-label="暂停"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3.2v14H8zM12.8 5H16v14h-3.2z" fill="currentColor" stroke="none"/></svg></button>
+        </div>
+
+        <div class="top-actions">
+          <div class="viewport-mode-switch" role="group" aria-label="工作区模式">
+            <button id="editMode" class="selected" type="button" aria-pressed="true">Edit</button>
+            <button id="cameraMode" type="button" aria-pressed="false" disabled>Export</button>
+          </div>
+          <button id="exitServiceLite" class="icon-text-button" type="button">退出服务</button>
+          <div class="history-controls" aria-label="编辑历史">
+            <button id="undoAction" class="icon-button" type="button" title="撤销 ⌘Z" aria-label="撤销">↶</button>
+            <button id="redoAction" class="icon-button" type="button" title="重做 ⇧⌘Z" aria-label="重做">↷</button>
+          </div>
+        </div>
+      </header>
+
+      <main id="editWorkspace" class="workspace">
+        <aside class="actors-panel" aria-labelledby="scenePanelTitle">
+          <div class="panel-heading">
+            <div class="panel-heading-row">
+              <div>
+                <h1 id="scenePanelTitle">演员</h1>
+              </div>
+              <div class="add-button-slot">
+                
+                <span class="primary-add-slot">
+                  <button id="addActor" class="add-button" type="button"><span aria-hidden="true">＋</span> 演员</button>
+                  <input id="blockoutModelInput" type="file" accept=".glb,model/gltf-binary" aria-label="导入环境模型 GLB" hidden />
+                </span>
+                
+              </div>
+            </div>
+            <div class="scene-sidebar-switch" role="group" aria-label="场景列表类型">
+              <button id="actorsSidebarMode" class="selected" type="button" aria-pressed="true">演员</button>
+              <button id="cameraSetupsSidebarMode" type="button" aria-pressed="false">机位</button>
+              <button id="shotsSidebarMode" type="button" aria-pressed="false">运镜</button>
+              <button id="blockoutSidebarMode" type="button" aria-pressed="false">环境</button>
+            </div>
+          </div>
+          <div id="actorsList" class="actors-list" role="list"></div>
+        </aside>
+
+        <section class="stage" aria-label="三维导演视图">
+          <div id="editViewportMount" class="edit-viewport-mount">
+          <div id="viewport" class="viewport">
+            <div id="editViewSwitch" class="edit-view-switch" role="group" aria-label="Edit 视图工具">
+              <button id="sceneView" class="selected" type="button" aria-pressed="true">Scene View</button>
+              <button id="shotView" type="button" aria-pressed="false" disabled>Shot View</button>
+              <div id="cameraSpeedControl" class="camera-speed-control" title="调整视口移动速度；按住 Shift 临时减速。">
+                <label for="cameraSpeedMultiplier">Camera Speed</label>
+                <span class="camera-speed-value">×<input id="cameraSpeedMultiplier" type="number" min="0.1" max="100" step="0.1" value="1" required aria-label="Camera Speed 倍率" /></span>
+                <span class="camera-speed-fine" hidden title="Shift 精调：当前倍率的 20%">Fine</span>
+                <button class="camera-speed-toggle" type="button" aria-label="Camera Speed 快选" aria-expanded="false" aria-controls="cameraSpeedPanel">▾</button>
+                <div id="cameraSpeedPanel" class="camera-speed-panel" hidden>
+                  <div class="camera-speed-presets" role="group" aria-label="Camera Speed 档位">
+                    <button type="button" data-speed="0.2" aria-pressed="false">×0.2</button>
+                    <button type="button" data-speed="1" aria-pressed="true">×1</button>
+                    <button type="button" data-speed="5" aria-pressed="false">×5</button>
+                    <button type="button" data-speed="20" aria-pressed="false">×20</button>
+                  </div>
+                  <p>拖动数值或直接输入 · Shift 精调</p>
+                </div>
+              </div>
+            </div>
+            <div id="shotDraftViewportStatus" class="shot-draft-viewport-status" role="status" hidden>
+              <strong id="shotDraftViewportLabel">当前 Shot · 有未写入调整</strong>
+              <div>
+                <button id="shotDraftReturn" type="button">返回 Shot View</button>
+                <button id="shotDraftWrite" type="button">写入</button>
+                <button id="shotDraftDiscard" type="button">放弃</button>
+              </div>
+            </div>
+            <output id="focalLengthFeedback" class="focal-length-feedback" aria-live="polite" hidden>35.0 mm</output>
+            <div id="placementBanner" class="placement-banner" hidden>
+              <span>在人物当前走位高度选取目标</span>
+              <button id="cancelPlacement" type="button">取消</button>
+            </div>
+            <div id="pathHeightControl" class="path-height-control" role="group"
+              aria-label="路径点高度" hidden>
+              <span id="pathHeightTargetLabel" class="path-height-target-label" aria-live="polite">起点 1</span>
+              <button id="pathHeightMatchPerson"
+                class="path-height-preset path-height-person" type="button"
+                aria-label="与上一点同高" title="与上一点同高">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <circle cx="10" cy="6" r="3"></circle>
+                  <path d="M4 17c.5-4.6 2.5-7 6-7s5.5 2.4 6 7"></path>
+                </svg>
+              </button>
+              <div class="path-height-adjustment">
+                <button id="pathHeightScrubber" class="path-height-scrubber" type="button"
+                  aria-label="上下拖动调整所选路径点高度">
+                  <span class="path-height-rail" aria-hidden="true">
+                    <span class="path-height-thumb"></span>
+                  </span>
+                </button>
+              </div>
+              <button id="pathHeightGround"
+                class="path-height-preset path-height-ground" type="button"
+                aria-label="落到地面" title="落到地面（Y=0）">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M3 13h14"></path>
+                  <path d="M6 9.5h8l2.5 3.5h-13z"></path>
+                </svg>
+              </button>
+              <label class="path-height-input">
+                <span class="sr-only">Y 高度</span>
+                <span class="input-with-unit">
+                  <input id="pathHeightInput" type="number" step="0.05"
+                    aria-label="所选路径点 Y 高度（米）" />
+                  <span>m</span>
+                </span>
+              </label>
+            </div>
+            <div id="shotFrameOverlay" class="shot-frame-overlay" aria-hidden="true" hidden>
+              <div id="shotOutputFrame" class="shot-output-frame">
+                <svg id="cameraCompositionGuide" class="camera-composition-guide" viewBox="0 0 1000 1000" preserveAspectRatio="none" hidden></svg>
+                <span id="shotFrameLabel" class="shot-frame-label">Shot 01 · 16:9</span>
+                <i class="shot-frame-corner top-left"></i>
+                <i class="shot-frame-corner top-right"></i>
+                <i class="shot-frame-corner bottom-left"></i>
+                <i class="shot-frame-corner bottom-right"></i>
+              </div>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <aside class="inspector" aria-label="检查器">
+          <header class="inspector-toolbar">
+            <div>
+              <strong id="inspectorTitle">对象</strong>
+            </div>
+            <button id="sceneSettingsButton" class="inspector-settings-button" type="button" aria-pressed="false">场景设置</button>
+          </header>
+          <div id="inspectorContent" class="inspector-content"></div>
+        </aside>
+      </main>
+
+      <!-- 时间轴是项目级的，横贯整窗；展开时两侧栏收短，收起时它们落回底部。 -->
+      <section id="cameraTimeline" class="camera-timeline" aria-label="场景时间轴"></section>
+
+      <main id="cameraWorkspace" class="camera-output-workspace" aria-label="Export 输出工作区" hidden>
+        <header class="camera-output-header">
+          <div class="camera-source-switch" role="group" aria-label="Export 输入模式">
+            <span>输入模式</span>
+            <button id="cameraShotSourceMode" class="selected" type="button" aria-pressed="true">Shot</button>
+            
+          </div>
+          <div id="cameraShotConfiguration" class="camera-header-field" hidden>
+            <label for="cameraShotSelect">回放 / 输出</label>
+            <select id="cameraShotSelect" aria-label="Export 当前 Shot"></select>
+          </div>
+          
+          
+          
+          
+          <div class="camera-header-spacer"></div>
+          <div class="camera-output-summary">
+            <strong id="cameraOutputSpec">1920×1080 · 30 fps</strong>
+          </div>
+          <button id="chooseOutputFolder" class="secondary-button camera-folder-button" type="button">选择输出文件夹</button>
+          <button id="revealCameraOutput" class="secondary-button" type="button" disabled>在文件夹中显示</button>
+          <div id="cameraModeSwitchSlot" class="camera-mode-switch-slot"></div>
+        </header>
+
+        <section class="camera-monitor-region" aria-label="精确输出监看">
+          <div id="cameraViewportMount" class="camera-viewport-mount"></div>
+        </section>
+
+        <footer class="camera-output-transport" aria-label="Export 播放与输出控制">
+          <div class="camera-transport-buttons">
+            <button id="cameraJumpStart" class="step-button" type="button" title="回到开始（Ctrl + ,）" aria-label="回到开始">|‹</button>
+            <button id="cameraStepBack" class="step-button" type="button" title="上一帧（,）" aria-label="上一帧">‹</button>
+            <button id="cameraReset" class="transport-button reset-transport-button" type="button" title="重置（R）" aria-label="重置"><span aria-hidden="true">↺</span></button>
+            <button id="cameraPlay" class="transport-button transport-primary" type="button" title="播放" aria-label="播放">▶</button>
+            <button id="cameraPause" class="transport-button" type="button" title="暂停" aria-label="暂停">Ⅱ</button>
+            <button id="cameraStepForward" class="step-button" type="button" title="下一帧（.）" aria-label="下一帧">›</button>
+            <button id="cameraJumpEnd" class="step-button" type="button" title="跳到 Scene End（Ctrl + .）" aria-label="跳到 Scene End">›|</button>
+          </div>
+          <div class="camera-progress-control">
+            <div class="camera-progress-copy">
+              <output id="cameraCurrentTime">00:00.0</output>
+              <span id="cameraProgressLabel">选中 Shot 与人物共享同一时间轴</span>
+              <output id="cameraTotalTime">00:00.0</output>
+            </div>
+            <input id="cameraProgress" type="range" min="0" max="0" step="0.001" value="0" aria-label="Export 播放头" />
+            <progress id="cameraExportProgress" max="1" value="0" hidden></progress>
+          </div>
+          <div id="cameraRecordActions" class="camera-record-actions" hidden>
+            <button id="cancelCameraExport" class="secondary-button" type="button" hidden>取消</button>
+            
+            <button id="recordCameraOutput" class="camera-record-button" type="button">
+              <span class="camera-record-dot" aria-hidden="true"></span>
+              <span>生成 MP4</span>
+            </button>
+          </div>
+        </footer>
+      </main>
+
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    
+
+    
+
+    
+
+    
+
+    <input id="projectPackageInput" type="file" accept=".filmspace-lite,application/x-film-space-project" hidden />
+
+    <dialog id="projectManagerDialog" class="film-dialog project-manager-dialog" aria-labelledby="projectManagerTitle">
+      <div class="film-dialog-panel project-manager-panel">
+        <header class="project-manager-header">
+          <div>
+            <h2 id="projectManagerTitle">项目管理</h2>
+            <p>打开、复制、导入或整理本机 Film Space 项目。</p>
+          </div>
+          <button id="closeProjectManager" class="project-manager-close" type="button" aria-label="关闭项目管理">×</button>
+        </header>
+        <div class="project-manager-toolbar">
+          <label class="project-manager-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="projectManagerSearch" type="search" placeholder="搜索项目" aria-label="搜索项目" />
+          </label>
+          <button id="importProjectPackage" class="secondary-button" type="button">导入</button>
+          <button id="createProjectFromManager" class="primary-button" type="button">＋ 新建项目</button>
+        </div>
+        <div class="project-manager-list-shell">
+          <div class="project-manager-columns" aria-hidden="true">
+            <span>名称</span><span>修改时间</span><span>演员</span><span>版本</span><span></span>
+          </div>
+          <div id="projectManagerList" class="project-manager-list" role="listbox" aria-label="本机项目"></div>
+        </div>
+        <div id="projectManagerActionMenu" class="project-manager-action-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-project-action="reveal" hidden>在文件夹中显示</button>
+          <button type="button" role="menuitem" data-project-action="duplicate">复制</button>
+          <button type="button" role="menuitem" data-project-action="export">导出项目文件…</button>
+          <hr />
+          <button class="danger" type="button" role="menuitem" data-project-action="delete">删除…</button>
+        </div>
+        <footer class="project-manager-footer">
+          <div id="projectManagerSummary" class="project-manager-summary" aria-live="polite"></div>
+          <div>
+            <button id="cancelProjectManager" class="secondary-button" type="button">取消</button>
+            <button id="openManagedProject" class="primary-button" type="button">打开项目</button>
+          </div>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog id="deleteProjectDialog" class="film-dialog delete-project-dialog" aria-labelledby="deleteProjectTitle" aria-describedby="deleteProjectDescription">
+      <div class="film-dialog-panel">
+        <div class="delete-project-content">
+          <span class="delete-project-icon" aria-hidden="true">!</span>
+          <div>
+            <h2 id="deleteProjectTitle">删除项目？</h2>
+            <p id="deleteProjectDescription">项目数据、GLB 和图片将一起删除。已经导出的 MP4 保留。</p>
+            <p>此操作无法通过撤销恢复。</p>
+          </div>
+        </div>
+        <footer class="film-dialog-footer">
+          <button id="cancelDeleteProject" class="secondary-button" type="button">取消</button>
+          <button id="confirmDeleteProject" class="danger-button" type="button">删除项目</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog id="projectSettingsDialog" class="film-dialog" aria-labelledby="projectSettingsTitle">
+      <form method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <h2 id="projectSettingsTitle">项目设置</h2>
+        </header>
+        <div class="project-settings-grid">
+          <label><span>名称</span><input id="projectSettingsName" type="text" maxlength="80" aria-label="项目名称" /></label>
+          <label><span>帧率</span><select id="projectSettingsFrameRate" aria-label="输出帧率"></select></label>
+          <label title="新建运镜使用；已有运镜不受影响"><span>默认画幅</span><select id="projectSettingsAspectRatio" aria-label="默认画幅，新建运镜与 Live 拍摄使用"></select></label>
+        </div>
+        <footer class="film-dialog-footer">
+          <button id="projectSettingsCancel" class="secondary-button" type="button">取消</button>
+          <button class="primary-button" type="submit" value="confirm">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="shortcutsDialog" class="film-dialog shortcuts-dialog" aria-labelledby="shortcutsTitle">
+      <form method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <h2 id="shortcutsTitle">键盘快捷键</h2>
+        </header>
+        <div class="shortcuts-grid">
+          <div class="shortcuts-column">
+            <section><h3>视图</h3>
+              <dl>
+                <div><dt><kbd>Tab</kbd></dt><dd>Edit / Export</dd></div>
+                <div><dt><kbd>C</kbd></dt><dd>Scene View / Shot View</dd></div>
+                <div><dt><kbd>T</kbd></dt><dd>顶视 / 返回之前机位</dd></div>
+                <div><dt><kbd>F</kbd></dt><dd>聚焦选中对象</dd></div>
+                <div><dt><kbd>V</kbd></dt><dd>取景预览 / 框外遮罩</dd></div>
+              </dl>
+            </section>
+            <section><h3>导览</h3>
+              <dl>
+                <div><dt>左键拖动</dt><dd>围绕观察中心环绕</dd></div>
+                <div><dt>右键拖动</dt><dd>画面平移</dd></div>
+                <div><dt>滑动 / 滚轮</dt><dd>改变焦距</dd></div>
+                <div><dt>捏合 / <kbd>⌃</kbd>滚轮</dt><dd>沿光轴物理推拉</dd></div>
+                <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>世界水平面直线移动</dd></div>
+                <div><dt><kbd>Q</kbd> <kbd>E</kbd></dt><dd>世界 Y 轴垂直升降</dd></div>
+                <div><dt><kbd>方向键</kbd></dt><dd>原地摇摄 / 俯仰</dd></div>
+                <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Shot View 画面倾斜</dd></div>
+              </dl>
+            </section>
+          </div>
+          <div class="shortcuts-column">
+            <section><h3>时间轴</h3>
+              <dl>
+                <div><dt><kbd>Space</kbd></dt><dd>播放 / 暂停（Export）</dd></div>
+                <div><dt><kbd>R</kbd></dt><dd>重置排练</dd></div>
+                <div><dt><kbd>K</kbd></dt><dd>记录 / 更新关键帧</dd></div>
+                <div><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>上一帧 / 下一帧</dd></div>
+                <div><dt><kbd>⇧,</kbd> <kbd>⇧.</kbd></dt><dd>上一个 / 下一个关键帧</dd></div>
+                <div><dt><kbd>⌃,</kbd> <kbd>⌃.</kbd></dt><dd>开头 / Scene End</dd></div>
+                <div><dt><kbd>-</kbd> <kbd>=</kbd></dt><dd>缩小 / 放大，锚播放头</dd></div>
+                <div><dt>捏合 / <kbd>⌘</kbd>滚轮</dt><dd>缩放，锚指针</dd></div>
+              </dl>
+            </section>
+            <section><h3>走位</h3>
+              <dl>
+                <div><dt>拖中心</dt><dd>移动起点</dd></div>
+                <div><dt><kbd>⇧</kbd>拖</dt><dd>移动整套走位</dd></div>
+                <div><dt>拖外圈</dt><dd>旋转朝向</dd></div>
+              </dl>
+            </section>
+            <section><h3>编辑</h3>
+              <dl>
+                <div><dt><kbd>⌫</kbd></dt><dd>删除选中项 / 关键帧</dd></div>
+                <div><dt><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></dt><dd>撤销 / 重做</dd></div>
+                <div><dt><kbd>⌘S</kbd></dt><dd>保存</dd></div>
+                <div><dt><kbd>Esc</kbd></dt><dd>取消当前操作</dd></div>
+                <div><dt><kbd>?</kbd></dt><dd>本面板</dd></div>
+              </dl>
+            </section>
+          </div>
+        </div>
+        <footer class="film-dialog-footer">
+          <button class="primary-button" type="submit" value="close">关闭</button>
+        </footer>
+      </form>
+    </dialog>
+
+    
+
+    <dialog id="newProjectDialog" class="film-dialog" aria-labelledby="newProjectTitle">
+      <form method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <h2 id="newProjectTitle">新建项目</h2>
+        </header>
+        <div class="new-project-fields">
+          <label for="newProjectName">项目名称</label>
+          <input id="newProjectName" type="text" maxlength="80" pattern=".*\S.*" required autofocus />
+          <label for="newProjectAspectRatio">画幅</label>
+          <select id="newProjectAspectRatio" required></select>
+          <label for="newProjectFrameRate">帧率</label>
+          <select id="newProjectFrameRate" required></select>
+          <label for="newProjectDuration">时长（秒）</label>
+          <input id="newProjectDuration" type="number" min="0.2" max="3600" step="0.1" value="20" required />
+        </div>
+        <footer class="film-dialog-footer">
+          <button id="newProjectCancel" class="secondary-button" type="button">取消</button>
+          <button class="primary-button" type="submit" value="create">创建</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="semanticConflictDialog" class="film-dialog" aria-labelledby="semanticConflictTitle" aria-describedby="semanticConflictDescription">
+      <form method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <span class="film-dialog-eyebrow">PROJECT CONFLICT</span>
+          <h2 id="semanticConflictTitle">同一个字段被同时修改</h2>
+          <p id="semanticConflictDescription"></p>
+          <ul id="semanticConflictFields" class="semantic-conflict-fields" aria-label="冲突字段"></ul>
+        </header>
+        <div class="scene-end-options" role="group" aria-label="冲突处理方式">
+          <button class="scene-end-option recommended" type="submit" value="external" autofocus>
+            <span class="scene-end-option-marker" aria-hidden="true">01</span>
+            <span><strong>保留外部最新版</strong><small>放弃这一次 UI 操作；MCP 或其他写入方的结果保持不变。</small></span>
+            <em>安全</em>
+          </button>
+          <button class="scene-end-option" type="submit" value="ui">
+            <span class="scene-end-option-marker" aria-hidden="true">02</span>
+            <span><strong>应用我的操作</strong><small>在外部最新版上重放这次 UI 操作，并创建一个新 revision。</small></span>
+          </button>
+        </div>
+        <footer class="film-dialog-footer">
+          <span>Esc 默认保留外部最新版</span>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="shotDraftConflictDialog" class="film-dialog" aria-labelledby="shotDraftConflictTitle" aria-describedby="shotDraftConflictDescription">
+      <form method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <span class="film-dialog-eyebrow">SHOT ADJUSTMENT</span>
+          <h2 id="shotDraftConflictTitle">当前 Shot 有未写入调整</h2>
+          <p id="shotDraftConflictDescription">先处理 Shot View 里的镜头调整，再继续修改 Scene View 摄影机。</p>
+        </header>
+        <div class="scene-end-options" role="group" aria-label="Shot 调整处理方式">
+          <button class="scene-end-option recommended" type="submit" value="return" autofocus>
+            <span class="scene-end-option-marker" aria-hidden="true">01</span>
+            <span><strong>返回 Shot View</strong><small>保留调整，回到镜头画面继续检查。</small></span>
+            <em>推荐</em>
+          </button>
+          <button class="scene-end-option" type="submit" value="write">
+            <span class="scene-end-option-marker" aria-hidden="true">02</span>
+            <span><strong>写入 Shot 调整</strong><small>只写入原来的 Shot 调整，不继续当前操作。</small></span>
+          </button>
+          <button class="scene-end-option danger" type="submit" value="discard">
+            <span class="scene-end-option-marker" aria-hidden="true">03</span>
+            <span><strong>放弃 Shot 调整</strong><small>丢弃调整，然后继续当前 Scene View 操作。</small></span>
+          </button>
+        </div>
+        <footer class="film-dialog-footer"><span>Esc 返回 Shot View</span></footer>
+      </form>
+    </dialog>
+
+    
+    <script type="module" src="/app/director-app.js"></script>
+  </body>
+</html>

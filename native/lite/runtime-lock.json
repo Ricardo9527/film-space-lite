@@ -1,0 +1,36 @@
+{
+  "format": "film-space-lite-runtime-lock",
+  "version": 1,
+  "node": {
+    "version": "v24.18.0",
+    "source": "https://nodejs.org/dist/v24.18.0/"
+  },
+  "darwin": {
+    "ffmpeg": {
+      "version": "8.1.1",
+      "source": "https://ffmpeg.org/download.html"
+    },
+    "files": {
+      "node/bin/node": "a9b83be9cd3b4a2a2d352ad6bc0bef73cbafbf37097ddc29c44f5d024b04e716",
+      "ffmpeg/bin/ffmpeg": "919e74b59991628e858a5c8d74e0589d8b4767a500af24811a95d768c44e4710",
+      "ffmpeg/bin/ffprobe": "7a70e91ea86c6320f9c4ec9add5860972f6bb6d6374944f27c0cc542780cabc0"
+    }
+  },
+  "win32": {
+    "ffmpeg": {
+      "version": "8.1.3-14-g330caae0c1",
+      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-07-13-07"
+    },
+    "archives": {
+      "node-win.zip": "0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821",
+      "ffmpeg-win.zip": "c8806f80b5e7b192a1d456b615e7066901a597285291a60c52b289927bbe20c6"
+    }
+  },
+  "compiler": {
+    "name": "Microsoft.Net.Compilers.Toolset",
+    "version": "4.12.0",
+    "source": "https://www.nuget.org/packages/Microsoft.Net.Compilers.Toolset/4.12.0",
+    "references": "Microsoft.NETFramework.ReferenceAssemblies.net48/1.0.3",
+    "runtime": "Microsoft .NET 8.0.31 macOS arm64"
+  }
+}

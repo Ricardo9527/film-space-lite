@@ -1,0 +1,13 @@
+{
+  "name": "film-space-lite",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/launch-film-space-lite.mjs",
+    "test": "npm --prefix director-console test"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

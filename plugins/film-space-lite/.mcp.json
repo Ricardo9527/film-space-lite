@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "film_space_lite_mcp": {
+      "title": "Film Space Lite MCP",
+      "description": "Read and control the local Film Space director console and its versioned desktop projects.",
+      "command": "node",
+      "args": [
+        "./scripts/start-mcp.mjs"
+      ],
+      "cwd": "."
+    }
+  }
+}

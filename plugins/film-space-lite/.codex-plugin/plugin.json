@@ -1,0 +1,39 @@
+{
+  "name": "film-space-lite",
+  "version": "0.1.0",
+  "description": "Control Film Space Lite local scenes, abstract actors and cameras through MCP.",
+  "author": {
+    "name": "Film Space"
+  },
+  "keywords": [
+    "film",
+    "previs",
+    "threejs",
+    "camera",
+    "blocking",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Film Space Lite",
+    "shortDescription": "用 Codex 搭建 Film Space Lite 场景并预演镜头。",
+    "longDescription": "读取并修改 Film Space 的同一份桌面项目：演员走位、机位、Shot、环境 GLB、参考图与几何 Blockout，支持界面同步和视口截图反馈。",
+    "developerName": "Film Space",
+    "category": "Productivity",
+    "brandColor": "#D3A35F",
+    "capabilities": [
+      "Project-backed scene control",
+      "Actor blocking and motion",
+      "Camera and Shot authoring",
+      "Exact Shot timeline inspection",
+      "Reference-image Blockout",
+      "Viewport capture feedback"
+    ],
+    "defaultPrompt": [
+      "打开 Film Space 并读取当前项目。",
+      "根据参考图用几何体搭出主要建筑和视觉锚点。",
+      "为当前场景安排演员走位并设计三个 Shot。"
+    ]
+  }
+}
