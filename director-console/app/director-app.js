@@ -1594,7 +1594,8 @@ function setupEvents() {
   window.addEventListener("keydown", (event) => {
     {}
     if (
-      document.getElementById("newProjectDialog").open
+      document.getElementById("shortcutsDialog").open
+      || document.getElementById("newProjectDialog").open
       || document.getElementById("projectSettingsDialog").open
       || elements.semanticConflictDialog.open
       || document.getElementById("shotDraftConflictDialog")?.open
@@ -5174,6 +5175,9 @@ function renderViewportMode() {
     if (cameraActive && switchGroup.parentElement !== cameraSlot) cameraSlot.append(switchGroup);
     else if (!cameraActive && switchGroup.parentElement !== topActions) topActions.prepend(switchGroup);
   }
+  const helpButton = document.getElementById("showShortcuts");
+  if (cameraActive) cameraSlot.append(helpButton);
+  else topActions.insertBefore(helpButton, document.getElementById("exitServiceLite"));
   renderEditViewMode();
 }
 
@@ -9763,6 +9767,7 @@ function escapeHTML(value) {
 }
 
  document.getElementById('manageProjectsLite').addEventListener('click',()=>openProjectManager());
+document.getElementById('showShortcuts').addEventListener('click', openShortcutsDialog);
 document.getElementById('exitServiceLite').addEventListener('click',async()=>{
   if(isExporting()){showToast('请先完成或取消 MP4 导出。',true);return;}
   try{if(!await saveProjectNow(false))throw new Error("当前项目尚未保存");const response=await fetch('/api/service/shutdown',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw new Error(result.error);operatorSubscription?.();document.getElementById('exitServiceLite').disabled=true;setSaveState('服务已退出');showToast('本地服务已退出。点击 Film Space Lite 图标可重新打开。');}catch(error){showToast('退出失败：'+error.message,true);}

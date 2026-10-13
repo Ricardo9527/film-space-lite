@@ -39,6 +39,7 @@
             <button id="editMode" class="selected" type="button" aria-pressed="true">Edit</button>
             <button id="cameraMode" type="button" aria-pressed="false" disabled>Export</button>
           </div>
+          <button id="showShortcuts" class="icon-text-button" type="button" title="键盘快捷键（? / Shift + /）" aria-label="帮助与快捷键" aria-haspopup="dialog" aria-controls="shortcutsDialog"><span aria-hidden="true">?</span> 帮助</button>
           <button id="exitServiceLite" class="icon-text-button" type="button">退出服务</button>
           <div class="history-controls" aria-label="编辑历史">
             <button id="undoAction" class="icon-button" type="button" title="撤销 ⌘Z" aria-label="撤销">↶</button>
@@ -321,6 +322,7 @@
       <form method="dialog" class="film-dialog-panel">
         <header class="film-dialog-header">
           <h2 id="shortcutsTitle">键盘快捷键</h2>
+          <p>点击工具栏「? 帮助」或按 ?（Shift + /）打开。输入文字时，单键快捷键不生效。</p>
         </header>
         <div class="shortcuts-grid">
           <div class="shortcuts-column">
@@ -351,7 +353,7 @@
               <dl>
                 <div><dt><kbd>Space</kbd></dt><dd>播放 / 暂停（Export）</dd></div>
                 <div><dt><kbd>R</kbd></dt><dd>重置排练</dd></div>
-                <div><dt><kbd>K</kbd></dt><dd>记录 / 更新关键帧</dd></div>
+                <div><dt><kbd>K</kbd></dt><dd>选中人物：人物帧；运镜：镜头帧；机位：保存构图。空选中及播放时不写入。</dd></div>
                 <div><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>上一帧 / 下一帧</dd></div>
                 <div><dt><kbd>⇧,</kbd> <kbd>⇧.</kbd></dt><dd>上一个 / 下一个关键帧</dd></div>
                 <div><dt><kbd>⌃,</kbd> <kbd>⌃.</kbd></dt><dd>开头 / Scene End</dd></div>
@@ -369,8 +371,8 @@
             <section><h3>编辑</h3>
               <dl>
                 <div><dt><kbd>⌫</kbd></dt><dd>删除选中项 / 关键帧</dd></div>
-                <div><dt><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></dt><dd>撤销 / 重做</dd></div>
-                <div><dt><kbd>⌘S</kbd></dt><dd>保存</dd></div>
+                <div><dt><kbd>Cmd/Ctrl+Z</kbd> <kbd>Shift+Cmd/Ctrl+Z</kbd></dt><dd>撤销 / 重做</dd></div>
+                <div><dt><kbd>Cmd/Ctrl+S</kbd></dt><dd>保存</dd></div>
                 <div><dt><kbd>Esc</kbd></dt><dd>取消当前操作</dd></div>
                 <div><dt><kbd>?</kbd></dt><dd>本面板</dd></div>
               </dl>
