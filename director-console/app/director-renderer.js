@@ -2581,6 +2581,25 @@ export class DirectorRenderer {
     this.orbit.update();
   }
 
+  resetSceneView() {
+    this.releaseTopViewLock();
+    this.cameraFocusTransition=null;
+    this.cameraKeys.clear();
+    this.cameraPrecisionKeys.clear();
+    this.cameraPlanarVelocity.set(0,0);
+    this.sceneCameraPlanarBasis=null;
+    const damping=this.orbit.enableDamping;
+    this.orbit.enableDamping=false;
+    this.orbit.update();
+    this.orbit.enableDamping=damping;
+    this.orbit.target.set(0,.85,0);
+    this.camera.position.set(4.8,4.2,6.6);
+    this.camera.up.set(0,1,0);
+    this.camera.lookAt(this.orbit.target);
+    this.configureEditorCameraRange(this.camera.position.distanceTo(this.orbit.target),2);
+    this.orbit.update();
+  }
+
   // MCP view: "orbit" 入口。UI 上的「透视」按钮已移除，MCP 契约保留。
   moveCameraToOrbitView() {
     if (!this.isSceneEditView()) return;

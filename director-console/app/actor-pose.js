@@ -1,3 +1,4 @@
+import { Vector3, Quaternion, Euler } from '../vendor/three/three.module.js';
 import { normalizeAngle } from './scene-model.js';
 import { snapCameraTime } from './camera-track.js';
 
@@ -11,6 +12,28 @@ export const actorPoseParameters = Object.freeze({
   torsoPitch: {label:'上身前倾',min:-Math.PI,max:Math.PI,unit:'angle'},
   headPitch: {label:'头部俯仰',min:-Math.PI/2,max:Math.PI/2,unit:'angle'},
 });
+export const actionJointParameters = Object.freeze({
+  torsoPitch: actorPoseParameters.torsoPitch,
+  torsoYaw: {label:"腰部扭转",min:-Math.PI,max:Math.PI,unit:"angle"},
+  torsoRoll: {label:"腰部侧倾",min:-Math.PI/2,max:Math.PI/2,unit:"angle"},
+  headPitch: actorPoseParameters.headPitch,
+  headYaw: {label:"头部转向",min:-Math.PI/2,max:Math.PI/2,unit:"angle"},
+  headRoll: {label:"头部侧倾",min:-Math.PI/2,max:Math.PI/2,unit:"angle"},
+  hipBend: {label:"髋部折叠",min:0,max:Math.PI/2,unit:"angle"},
+  kneeBend: {label:"膝部折叠",min:0,max:Math.PI,unit:"angle"},
+});
+export const actionGestures = Object.freeze({
+  hold: {}, stand: {hipBend:0,kneeBend:0}, sit: {hipBend:Math.PI/2,kneeBend:Math.PI/2},
+  kneel: {hipBend:0,kneeBend:Math.PI/2}, crouch: {hipBend:1.2,kneeBend:2.4},
+});
+export function normalizeActionJoints(joints) {
+  if (!joints || typeof joints!=="object" || Array.isArray(joints)) throw new Error("动作关节必须为对象");
+  for(const [key,value] of Object.entries(joints)) {
+    const spec=actionJointParameters[key];
+    if(!spec || !Number.isFinite(value) || value<spec.min || value>spec.max) throw new Error("Invalid action joint: "+key);
+  }
+  return {...joints};
+}
 const actionPoseParameters = Object.freeze({
   hipBend: {label:'髋部折叠',min:0,max:Math.PI/2,unit:'angle'},
   kneeBend: {label:'膝部折叠',min:0,max:Math.PI,unit:'angle'},
@@ -22,7 +45,7 @@ export function legacyActorPose(actor = {}, sample = {}) {
   const sitting = sample.posture === 'sit';
   return {rotationYOffset:0,offsetX:0,offsetY:0,offsetZ:0,rotationY:sample.rotationY ?? actor.rotationY ?? 0,
     rotationX:actor.rotationX ?? 0,rotationZ:actor.rotationZ ?? 0,
-    torsoPitch:0,headPitch:0,hipBend:sitting?Math.PI/2:0,kneeBend:sitting?Math.PI/2:0,
+    torsoPitch:0,torsoYaw:0,torsoRoll:0,headPitch:0,headYaw:0,headRoll:0,hipBend:sitting?Math.PI/2:0,kneeBend:sitting?Math.PI/2:0,
     bodyHeight:1,legLength:sitting?(sample.seatHeight ?? 0.45)+0.175:0.45};
 }
 // Recording excludes action-owned leg geometry, even when the input is a rendered pose.
@@ -32,7 +55,7 @@ export function actorFramePose(pose) {
 export function migrateLegacyActorPoseTrack(track) {
   if (!track) return track;
   return {...track,keyframes:(track.keyframes ?? []).map(key=>({...key,
-    pose:Object.fromEntries(Object.entries(key.pose).filter(([name])=>!Object.hasOwn(actionPoseParameters,name))),
+    pose:Object.fromEntries(Object.entries(key.pose).filter(([name])=>!Object.hasOwn(actionPoseParameters,name) && (Object.hasOwn(actorPoseParameters,name) || !Object.hasOwn(actionJointParameters,name)))),
   })).filter(key=>Object.keys(key.pose).length)};
 }
 export function normalizeActorPose(pose = {}) {
@@ -47,7 +70,7 @@ export function normalizeActorPose(pose = {}) {
   return result;
 }
 export function blendActorPose(from,to,alpha) {
-  return Object.fromEntries(['rotationY',...Object.keys(actorPoseParameters),...Object.keys(actionPoseParameters)].map(key=>[key,
+  return Object.fromEntries([...new Set(['rotationY',...Object.keys(actorPoseParameters),...Object.keys(actionJointParameters),...Object.keys(actionPoseParameters)])].map(key=>[key,
     key==='rotationY'?normalizeAngle(from[key]+normalizeAngle(to[key]-from[key])*alpha)
       :from[key]+(to[key]-from[key])*alpha]));
 }
@@ -131,12 +154,16 @@ export function blockingPoseLandmarks(pose) {
   // Ground anchor is the lower-leg endpoint for every blended pose.
   const hipZ=-thigh*Math.sin(hip)-shin*Math.sin(lower);
   const knee={x:0,y:hipY-thigh*Math.cos(hip),z:hipZ+thigh*Math.sin(hip)};
-  const head={x:0,y:hipY+0.54*Math.cos(torso)+0.23*Math.cos(headAngle),
-    z:hipZ+0.54*Math.sin(torso)+0.23*Math.sin(headAngle)};
-  return {head,headAngle,hipY,hipZ,thigh,shin,
-    body:{x:0,y:hipY+0.27*Math.cos(torso),z:hipZ+0.27*Math.sin(torso)},
+  const torsoQuaternion=new Quaternion().setFromEuler(new Euler(torso,pose.torsoYaw,pose.torsoRoll,'YXZ'));
+  const headQuaternion=torsoQuaternion.clone().multiply(new Quaternion().setFromEuler(new Euler(pose.headPitch,pose.headYaw,pose.headRoll,'YXZ')));
+  const pelvis=new Vector3(0,hipY,hipZ);
+  const neck=new Vector3(0,.54,0).applyQuaternion(torsoQuaternion).add(pelvis);
+  const head=new Vector3(0,.23,0).applyQuaternion(headQuaternion).add(neck);
+  const body=new Vector3(0,.27,0).applyQuaternion(torsoQuaternion).add(pelvis);
+  const nose=new Vector3(0,0,.265).applyQuaternion(headQuaternion).add(head);
+  return {head,headAngle,hipY,hipZ,thigh,shin,torsoQuaternion,headQuaternion,body,
     bend:{x:0,y:hipY-thigh*Math.cos(hip)/2,z:hipZ+thigh*Math.sin(hip)/2},
     base:{x:0,y:knee.y-shin*Math.cos(lower)/2,z:knee.z+shin*Math.sin(lower)/2},
-    nose:{x:0,y:head.y-0.265*Math.sin(headAngle),z:head.z+0.265*Math.cos(headAngle)},
+    nose,
     hipAngle:-hip,lowerAngle:-lower};
 }

@@ -23,7 +23,7 @@ import {
 
 export { desktopActions } from "./action-catalog.js";
 
-export const desktopProjectSchemaVersion = 69;
+export const desktopProjectSchemaVersion = 70;
 
 // Keep the index and color values aligned with HumanFigureFactory on Phone Lite.
 export const clothingColors = [
@@ -580,13 +580,18 @@ export function updateMotionAction(project, actorID, actionID, patch = {}) {
   return updateActor(project, actorID, actor => ({ ...actor, motionActions: actor.motionActions.map((action,index) => {
     if (action.id !== actionID) return action;
     if (patch.actionID != null && patch.actionID !== action.actionID) throw new Error("抽象人只支持移动和停留。");
-    if (index === 0 && (patch.posture != null || patch.seatHeight != null)) throw new Error("坐姿只适用于抽象人的停留。");
+    if (index === 0 && (["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(patch,key)))) throw new Error("坐姿只适用于抽象人的停留。");
     const next = { ...action };
     if (Object.hasOwn(patch,"speed")) next.speed = clampFinite(patch.speed,minimumMoveSpeed,20,action.speed);
     if (Object.hasOwn(patch,"duration") && action.kind === "hold" && index > 0) next.duration = clampFinite(patch.duration,0,3600,action.duration);
     if (Object.hasOwn(patch,"facingY")) next.facingY = Number.isFinite(patch.facingY) ? normalizeAngle(patch.facingY) : null;
     if (Object.hasOwn(patch,"position")) next.position = sanitizeVector(patch.position,action.position);
-    if (patch.posture != null || patch.seatHeight != null) Object.assign(next,blockingPostureFields({ ...action,...patch }));
+    if (["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(patch,key))) {
+      if(Object.hasOwn(patch,"posture")) { delete next.gesture; delete next.joints; }
+      const normalized=blockingPostureFields({ ...next,...patch });
+      for(const key of ["gesture","joints","transitionSeconds"]) delete next[key];
+      Object.assign(next,normalized);
+    }
     return blockingMotionActions([next])[0];
   }) }));
 }

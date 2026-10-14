@@ -65,3 +65,25 @@ Edit 与 Export 工具栏常驻「? 帮助」，点击打开快捷键说明；�
 ## 摄影机方向关键帧
 
 普通录帧会明确保存当前方向状态：自由朝向或既有锁定目标。后一个锁定帧从前一个明确方向帧开始转向，在自身时间精确到达。例：0 秒、3 秒普通录帧，5 秒锁定，转向发生在 3–5 秒。选中 3 秒帧并点击「恢复沿用上一关键帧」，它才不再作为方向边界，转向改为 0–5 秒。重录已有帧保留此前的方向状态选择。方向锁定栏显示所选到达帧的转向区间。
+### MCP 简单人物动作
+
+告诉 Agent 人物、动作顺序和大致节奏即可。
+
+
+通过既有 `add_stay` / `insert_stay_before` 的 options 或 `update_motion_action` 的 patch 编排，无新增 UI。
+`gesture`：`kneel` 双膝跪、`crouch` 蹲、`sit` 坐、`stand` 站起、`hold` 保持上个动作姿态。
+`joints`：`torsoPitch/torsoYaw/torsoRoll`、`headPitch/headYaw/headRoll`、`hipBend/kneeBend`；单位弧度，范围由发现 schema 给出。正俯仰向前/低头，负值后仰/抬头；正 headYaw 朝人物左侧（人物局部 +X），头部角度相对腰部。髋膝控制两腿同步。
+`duration` 包含过渡和停顿，`transitionSeconds` 指定到达目标姿态的时间，默认 0.25 秒并限制在本段内，0 为立即到达。首次手势从站姿开始。手势只修改指定关节，腿部预设保持已有头腰状态；后续 hold 继承跪姿。普通站坐 Hold 或 Move 仍恢复既有动作姿态。已存在的 torsoPitch/headPitch 人物帧是显式覆盖；Agent 编排前检查这些通道，避免意外覆盖动作。
+修改 joints 是替换该动作的稀疏关节目标，空对象清除本段覆盖。通过 UI 明确选择站坐时清除该段手势/关节覆盖。
+
+例：两秒跪下、停一秒；一秒抬头、停一秒；一秒向左转头、停一秒：
+
+```json
+[
+  {"action":"add_stay","actorID":"person","options":{"gesture":"kneel","duration":3,"transitionSeconds":2}},
+  {"action":"add_stay","actorID":"person","options":{"gesture":"hold","joints":{"headPitch":-0.5},"duration":2,"transitionSeconds":1}},
+  {"action":"add_stay","actorID":"person","options":{"gesture":"hold","joints":{"headYaw":1.0},"duration":2,"transitionSeconds":1}}
+]
+```
+
+动作保存到同一项目，确定性采样供 Edit、Export、跟焦/瞄准与 MP4 使用；关节操作通过同一命令验证、revision 与语义撤销链路。

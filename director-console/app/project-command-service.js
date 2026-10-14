@@ -422,7 +422,8 @@ function validateOperationSemantics(project, operation) {
   }
   const blockingActor = findActor(project, operation.actorID || operation.id);
   const postureFields = operation.action === "update_motion_action" ? operation.patch : operation.options;
-  if (postureFields?.posture != null || postureFields?.seatHeight != null) {
+  if (postureFields && ["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(postureFields,key))) {
+    if(blockingActor?.locked) throw semanticError("Actor is locked: "+blockingActor.id);
     const targetIndex = blockingActor?.motionActions.findIndex((action) => action.id === operation.actionID);
     if (!isBlockingActor(blockingActor)
       || (operation.action === "update_motion_action" && (targetIndex <= 0 || blockingActor.motionActions[targetIndex]?.kind !== "hold"))) {

@@ -1,4 +1,4 @@
-import { legacyActorPose, blendActorPose, blockingPoseLandmarks } from "./actor-pose.js";
+import { legacyActorPose, blendActorPose, blockingPoseLandmarks, actionGestures, normalizeActionJoints } from "./actor-pose.js";
 import { distanceXYZ, normalizeAngle } from "./scene-model.js";
 
 export const blockingCharacterID = "blocking-figure";
@@ -8,14 +8,20 @@ export const blockingSeatHeight = 0.45;
 
 export function blockingPostureFields(action) {
   if (action.kind !== "hold") {
-    if (action.posture != null || action.seatHeight != null) throw new Error("坐姿只适用于抽象人的停留。");
+    if (action.posture != null || action.seatHeight != null || action.gesture != null || action.joints != null || action.transitionSeconds != null) throw new Error("坐姿只适用于抽象人的停留。");
     return {};
   }
   const posture = action.posture ?? "stand";
   const seatHeight = action.seatHeight ?? blockingSeatHeight;
   if (!["stand", "sit"].includes(posture)) throw new Error("抽象人停留动作只支持站立或坐下。");
   if (!Number.isFinite(seatHeight) || seatHeight < 0 || seatHeight > 2) throw new Error("座位高度必须为 0–2 米。");
-  return { posture, seatHeight };
+  const gesture=action.gesture ?? null;
+  if(gesture!==null && !Object.hasOwn(actionGestures,gesture)) throw new Error("Unknown gesture: "+gesture);
+  const joints=normalizeActionJoints(action.joints ?? {});
+  const transitionSeconds=action.transitionSeconds ?? null;
+  if(transitionSeconds!==null && (!Number.isFinite(transitionSeconds)||transitionSeconds<0||transitionSeconds>3600)) throw new Error("Invalid transitionSeconds");
+  return { posture, seatHeight, ...(gesture!==null?{gesture}:{}),
+    ...(Object.keys(joints).length?{joints}:{}), ...(transitionSeconds!==null?{transitionSeconds}:{}) };
 }
 
 export function blockingHeadHeight(pose) {
@@ -27,8 +33,8 @@ export function blockingTargetPosition(actor, sample, heightFraction = 1) {
   const pose=sample.blockingPose || legacyActorPose(actor,sample);
   const head=blockingPoseLandmarks(pose).head,scale=heightFraction*actor.scale;
   const y=head.y*scale,z=head.z*scale;
-  const localX=-y*Math.sin(pose.rotationZ);
-  const beforeX=y*Math.cos(pose.rotationZ);
+  const localX=head.x*scale*Math.cos(pose.rotationZ)-y*Math.sin(pose.rotationZ);
+  const beforeX=head.x*scale*Math.sin(pose.rotationZ)+y*Math.cos(pose.rotationZ);
   const localY=beforeX*Math.cos(pose.rotationX)-z*Math.sin(pose.rotationX);
   const localZ=beforeX*Math.sin(pose.rotationX)+z*Math.cos(pose.rotationX);
   return {
@@ -81,8 +87,11 @@ export function compileBlockingPlayback(actor) {
       holdDuration: moving ? 0 : duration, moveDuration: moving ? duration : 0,
       turnsInPlace: false });
     if (duration > 0) {
-      const endPose=legacyActorPose(actor,{...action,posture:moving?"stand":action.posture,rotationY:targetRotationY});
-      const startPose=phases.length?previousPose:endPose;
+      const gestured=!moving && (action.gesture!=null || action.joints!=null);
+      const endPose=gestured
+        ? {...previousPose,...(action.gesture && action.gesture!=="hold"?{bodyHeight:1,legLength:action.gesture==="sit"?action.seatHeight+.175:.45}:{}),...actionGestures[action.gesture ?? 'hold'],...action.joints,rotationY:targetRotationY}
+        : legacyActorPose(actor,{...action,posture:moving?"stand":action.posture,rotationY:targetRotationY});
+      const startPose=phases.length || gestured?previousPose:endPose;
       previousPose=endPose;
       phases.push({ kind: action.kind, blocking: true, action, actionIndex,
         phaseKey: `${action.id}:${action.kind}`, startTime: time, endTime: time + duration,
@@ -102,8 +111,11 @@ export function sampleBlockingPhase(phase, elapsed) {
   const progress = Math.min(1, elapsed / phase.duration);
   const turn = Math.min(1, elapsed / Math.min(0.25, phase.duration));
   const smoothTurn = turn * turn * (3 - 2 * turn);
+  const poseDuration=Math.min(phase.action.transitionSeconds ?? .25,phase.duration);
+  const poseProgress=poseDuration===0?1:Math.min(1,elapsed/poseDuration);
+  const poseBlend=poseProgress*poseProgress*(3-2*poseProgress);
   return {
-    basePose: blendActorPose(phase.startPose,phase.endPose,smoothTurn),
+    basePose: blendActorPose(phase.startPose,phase.endPose,poseBlend),
     position: Object.fromEntries(["x", "y", "z"].map((axis) => [axis,
       phase.startPosition[axis] + (phase.endPosition[axis] - phase.startPosition[axis]) * progress])),
     rotationY: normalizeAngle(phase.startRotationY

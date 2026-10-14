@@ -2399,6 +2399,7 @@ async function createNewProject(options = {}) {
   projectDirty = false;
   invalidateExportResult();
   resetViewportToEdit();
+  directorRenderer.resetSceneView();
   authoredRevision += 1;
   projectState.reset(project);
   semanticBaselineProject = structuredClone(project);
@@ -7435,8 +7436,9 @@ function renderMotionRows(actor) {
         </div>
         ${`<label class="motion-control blocking-posture-control">动作
           <select data-action-value="posture" data-action-id="${escapeHTML(action.id)}" aria-label="停留动作">
-            <option value="stand" ${action.posture !== "sit" ? "selected" : ""}>站立</option>
-            <option value="sit" ${action.posture === "sit" ? "selected" : ""}>坐下</option>
+            ${action.gesture || action.joints ? '<option value="custom" selected disabled>自定义动作</option>' : ""}
+            <option value="stand" ${!action.gesture && !action.joints && action.posture !== "sit" ? "selected" : ""}>站立</option>
+            <option value="sit" ${!action.gesture && !action.joints && action.posture === "sit" ? "selected" : ""}>坐下</option>
           </select>
         </label>
         ${action.posture === "sit" ? `<label class="motion-control blocking-posture-control">座位高度

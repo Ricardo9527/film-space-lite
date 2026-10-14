@@ -37,10 +37,10 @@ export function applyBlockingFigurePose(model, sample) {
   const points=blockingPoseLandmarks(pose);
   model.rotation.set(pose.rotationX,0,pose.rotationZ,"XYZ");
   const body=model.getObjectByName("Body"),bend=model.getObjectByName("BodyBend"),base=model.getObjectByName("BodyBase");
-  body.position.set(points.body.x,points.body.y,points.body.z);body.rotation.x=pose.torsoPitch;
+  body.position.set(points.body.x,points.body.y,points.body.z);body.quaternion.copy(points.torsoQuaternion);
   bend.position.set(points.bend.x,points.bend.y,points.bend.z);bend.rotation.x=points.hipAngle;bend.scale.set(1,pose.bodyHeight,0.7);
   base.position.set(points.base.x,points.base.y,points.base.z);base.rotation.x=points.lowerAngle;base.scale.set(1,points.shin,0.7);
   const head=model.getObjectByName("Head"),nose=model.getObjectByName("Nose");
-  head.position.set(points.head.x,points.head.y,points.head.z);head.rotation.x=points.headAngle;
-  nose.position.set(points.nose.x,points.nose.y,points.nose.z);nose.rotation.x=Math.PI/2+points.headAngle;
+  head.position.set(points.head.x,points.head.y,points.head.z);head.quaternion.copy(points.headQuaternion);
+  nose.position.set(points.nose.x,points.nose.y,points.nose.z);nose.quaternion.copy(points.headQuaternion).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2));
 }

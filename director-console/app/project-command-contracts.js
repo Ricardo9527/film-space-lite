@@ -1,4 +1,4 @@
-import { actorPoseParameters, actorPoseInterpolations } from "./actor-pose.js";
+import { actorPoseParameters, actorPoseInterpolations, actionJointParameters, actionGestures } from "./actor-pose.js";
 import { desktopActions } from "./action-catalog.js";
 import {
   cameraApertureMaximum,
@@ -281,6 +281,9 @@ const actorPoseSchema = {...object(Object.fromEntries(Object.entries(actorPosePa
 ]))),minProperties:1};
 
 const blockingPostureProperties = {
+  gesture: {type:"string",enum:Object.keys(actionGestures),description:"MCP simple action preset. kneel/crouch/stand/sit set synchronized legs; hold preserves preceding action pose. Unspecified joints inherit the preceding action target. First gesture starts from standing. Plain Holds/Move retain existing stand/sit semantics. No separate left/right limbs."},
+  joints: object(Object.fromEntries(Object.entries(actionJointParameters).map(([key,spec])=>[key,finiteNumber(`${spec.label}, radians. Local to parent: +headYaw turns to actor left (+X), +pitch bends forward/down. Existing actor pose frames explicitly override torsoPitch/headPitch.`,{minimum:spec.min,maximum:spec.max})]))),
+  transitionSeconds: finiteNumber("Time to reach the action pose, within Hold duration (clamped to duration); remainder holds target. Default .25; zero is immediate. Facing turn retains existing timing.",{minimum:0,maximum:3600}),
   posture: { type: "string", enum: ["stand", "sit"], description: "Desktop abstract actor Hold posture. Stand and sit share the foot-ground path anchor; seated hips extend behind it. Existing time-based blending keeps feet anchored during sit/stand. Omitted defaults to stand; not valid for Move or ordinary actors." },
   seatHeight: finiteNumber("Seat surface height above the path point in unscaled actor-local meters; abstract Hold only. Defaults to 0.45.", { minimum: 0, maximum: 2 }),
 };
