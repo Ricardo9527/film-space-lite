@@ -8,7 +8,7 @@ Windows 11 x64：解压整个目录，双击 `安装到本机.cmd`。安装到�
 
 图标等待服务就绪后打开默认浏览器。重复点击复用服务。关闭网页不会关闭服务；Edit 顶栏的“退出服务”先保存项目再退出。再次点击图标可恢复。
 
-后续由 Codex 完成的产品修改会同步更新安装包与本机 Lite App。升级前先保存当前页面，更新后验证实际安装版本。
+升级前先保存当前项目，通过 Releases 获取新版本。
 
 ## MCP
 
@@ -32,7 +32,7 @@ Agent 先读取项目和 revision，再原子提交语义操作。默认人物�
 
 数据位置：Mac 为 `~/Library/Application Support/Film Space Lite`；Windows 为 `%LOCALAPPDATA%/Film Space Lite`。Projects、Logs 与 director-service.json 都在此处。镜头输出存在使用者选择的文件夹。
 
-保留现代 Chrome、Edge、Safari 为目标浏览器；各平台实际验收状态见工作线。大场景与目标低内存机器未完成实测前不承诺最低配置。
+保留现代 Chrome、Edge、Safari 为目标浏览器；Mac/Chrome 核心流程已验证，Windows 11 与 Safari/Edge 待验证。大场景与目标低内存机器未完成实测前不承诺最低配置。
 
 Edit 中可点击走位列表的起点/到达点，或视口路径点；高度控件显示当前点名与编号。暂停和播放结束后可直接改单点 Y，无需 Reset；右侧演员“整体位置与初始面向”调整整体路径位置。
 
