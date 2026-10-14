@@ -7016,7 +7016,7 @@ function renderActorInspector(actor) {
       <div class="inspector-disclosure-content">
       <p class="section-caption">人物帧控制 · 位置相对走位方向；朝向偏移归零即自动面向</p>
       <div class="transform-field-grid two-column">
-        ${['offsetX','offsetY','offsetZ'].map((key,index)=>`<label><span>${['X 左右','Y 上下','Z 前后'][index]}</span><div class="input-with-unit"><input data-actor-pose="${key}" aria-label="${actorPoseParameters[key].label}（米）" type="number" required min="-1000" max="1000" step="0.05" value="${pose[key].toFixed(3)}" /><span>m</span></div></label>`).join('')}
+        ${['offsetX','offsetY','offsetZ'].map((key,index)=>`<label><span>${['X 左右','Y 上下','Z 前后'][index]}</span><div class="input-with-unit"><input data-actor-pose="${key}" aria-label="${actorPoseParameters[key].label}（米）" type="number" required min="-1000" max="1000" step="any" value="${pose[key].toFixed(3)}" /><span>m</span></div></label>`).join('')}
       </div>
       <div class="actor-pose-frame-actions">
         <button id="returnActorToPath" class="secondary-button" type="button">回到走位基准</button>
@@ -9841,7 +9841,7 @@ function wireActorPoseControls(actor) {
     const preview=()=>{if(!input.validity.valid || input.value==='')return;
       previewActorPoseField(actor,key,Number(input.value)*(spec.unit==='angle'?Math.PI/180:1));};
     input.addEventListener('input',preview);input.addEventListener('change',preview);
-    wireInputNumberScrub(input);
+    wireInputNumberScrub(input, spec.unit==='meters' ? {step:0.05,precision:3} : {});
   }
   document.getElementById('returnActorToPath').addEventListener('click',returnActorToPath);
   document.getElementById('actorReturnUpright').addEventListener('change',event=>{actorReturnUpright=event.target.checked;});
