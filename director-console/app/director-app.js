@@ -8477,7 +8477,7 @@ function renderCameraInspector() {
   const selectedAimTransition = selectedKeyframe && !selectedAimInherited
     ? describeCameraAimTransition(track, Math.max(0, selectedKeyframe.time - 0.0001))
     : null;
-  const selectedAimTransitionStart = selectedAimTransition?.toKeyframeID === selectedKeyframe?.id
+  const selectedAimTransitionStart = selectedAimTransition && selectedAimTransition.toKeyframeID === selectedKeyframe.id
     ? track.keyframes.find((candidate) => candidate.id === selectedAimTransition.fromKeyframeID)
     : null;
   const liveAimState = effectiveCameraAimState(track, playback.elapsed);
