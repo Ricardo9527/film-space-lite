@@ -19,6 +19,7 @@
     <aside id="updateNotice" class="update-notice" aria-label="软件更新" hidden>
       <span id="updateMessage" role="status"></span>
       <a id="updateDownload" target="_blank" rel="noopener noreferrer">查看更新并下载</a>
+      <button id="installUpdate" type="button" hidden>立即更新</button>
       <button id="snoozeUpdate" type="button">稍后提醒</button>
     </aside>
     <div class="app-shell" id="appShell" aria-busy="true">
@@ -332,6 +333,7 @@
         <div class="shortcuts-content">
         <section class="app-update-help" aria-label="版本与更新">
           <div><strong id="appVersion">Film Space Lite</strong><button id="checkUpdates" type="button" class="secondary-button">检查更新</button></div>
+          <button id="helpInstallUpdate" type="button" class="secondary-button" hidden>立即更新</button>
           <p id="updateStatus" role="status">正在读取版本…</p>
           <div id="updateDetails" hidden><a id="helpUpdateDownload" target="_blank" rel="noopener noreferrer">查看更新并下载</a><pre id="updateNotes"></pre></div>
         </section>
@@ -472,7 +474,8 @@
     </dialog>
 
     
+    <dialog id="updateProgressDialog" class="film-dialog" aria-labelledby="updateProgressTitle"><div class="film-dialog-header"><h2 id="updateProgressTitle">正在更新 Film Space Lite</h2><p role="status">完成后自动返回当前项目，请稍候。</p></div></dialog>
     <script type="module" src="/app/director-app.js"></script>
-    <script type="module" src="/app/update-notice.js"></script>
+
   </body>
 </html>

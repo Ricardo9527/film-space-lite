@@ -23,6 +23,15 @@ function configureMCP(){
 }
 async function main(){
  fs.mkdirSync(paths.root,{recursive:true});fs.mkdirSync(path.dirname(paths.log),{recursive:true});
+ const updateLock=path.join(paths.root,'Updates','install-lock.json');
+ if(process.env.FILM_SPACE_UPDATE_START!=='1'){
+  for(let i=0;fs.existsSync(updateLock);i++){
+   const lock=JSON.parse(fs.readFileSync(updateLock,'utf8'));
+   try{process.kill(lock.pid,0);}catch(error){if(error.code==='ESRCH')throw new Error('更新意外中断，请查看 '+path.join(paths.root,'Updates','install.log'));throw error;}
+   if(i>=120)throw new Error('软件仍在更新，请稍后重新打开。');
+   await sleep(1000);
+  }
+ }
  let service=await running();const lock=path.join(paths.root,'startup.lock');let ownsLock=false;
  if(!service){
   for(let i=0;i<100&&!service&&!ownsLock;i++){
@@ -33,7 +42,7 @@ async function main(){
   try{
    if(ownsLock&&!service){
     const log=fs.openSync(paths.log,'a');const ffmpeg=process.platform==='win32'?path.join(root,'ffmpeg','bin','ffmpeg.exe'):path.join(root,'ffmpeg','bin','ffmpeg');
-    const child=spawn(process.execPath,[path.join(root,'director-console','server.cjs')],{cwd:root,detached:true,stdio:['ignore',log,log],windowsHide:true,env:{...process.env,PORT:'0',FILM_SPACE_LITE_HELPER:path.join(root,'Film Space Lite.exe'),...(fs.existsSync(ffmpeg)?{FILM_SPACE_FFMPEG:ffmpeg}:{})}});fs.closeSync(log);
+    const child=spawn(process.execPath,[path.join(root,'director-console','server.cjs')],{cwd:root,detached:true,stdio:['ignore',log,log],windowsHide:true,env:{...process.env,PORT:process.env.FILM_SPACE_RESTART_PORT||'0',FILM_SPACE_LITE_HELPER:path.join(root,'Film Space Lite.exe'),...(fs.existsSync(ffmpeg)?{FILM_SPACE_FFMPEG:ffmpeg}:{})}});fs.closeSync(log);
     let spawnError=null;child.on('error',error=>{spawnError=error;});child.unref();
     for(let i=0;i<100&&!service;i++){if(spawnError)throw spawnError;await sleep(100);service=await running();}
     if(!service)throw new Error('Film Space Lite failed to start. See '+paths.log);

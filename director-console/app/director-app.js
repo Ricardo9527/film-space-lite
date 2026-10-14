@@ -1,3 +1,4 @@
+import {startUpdateUI} from "./update-notice.js";
 import { actorFramePose, actorPoseParameters, actorPoseKeyframeAtTime, recordActorPose, moveActorPoseFrames } from "./actor-pose.js";
 import { recordActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
 import { sampleActor } from "./playback-engine.js";
@@ -390,6 +391,7 @@ let renderedPlaybackStatus = "idle";
 let authoredRevision = 0;
 let persistedProjectRevision = 0;
 let projectDirty = false;
+let appUpdateLocked = false;
 let deferredExternalRevision = 0;
 let deferredExternalSyncTimer = null;
 let environmentImporting = false;
@@ -1591,6 +1593,7 @@ function setupEvents() {
   document.addEventListener("focusin", claimDeleteScope, true);
 
   window.addEventListener("keydown", (event) => {
+    if (appUpdateLocked) return;
     {}
     if (
       document.getElementById("shortcutsDialog").open
@@ -3933,6 +3936,7 @@ function stopActionInspection(render = true) {
 // 只有真在播放时才冻结编辑。暂停/播完/拖动播放头之后（seek 会把状态置为 paused）
 // 都应可编辑 —— 那正是「停在某一刻观察后微调」的时机，也与 canEditCamera 一致。
 function canAuthor() {
+  if (appUpdateLocked) return false;
   return viewportMode === viewportModes.edit
     && playback.status !== "playing"
     && !isExporting()
@@ -3946,6 +3950,7 @@ function canEditActorMotion() {
 }
 
 function canEditCamera() {
+  if (appUpdateLocked) return false;
   return viewportMode === viewportModes.edit
     && playback.status !== "playing"
     && !cameraOrbitDraft
@@ -3953,6 +3958,7 @@ function canEditCamera() {
 }
 
 function canEditCameraOrbit() {
+  if (appUpdateLocked) return false;
   return viewportMode === viewportModes.edit
     && playback.status !== "playing"
     && !isExporting()
@@ -9769,7 +9775,7 @@ function escapeHTML(value) {
 document.getElementById('showShortcuts').addEventListener('click', openShortcutsDialog);
 document.getElementById('exitServiceLite').addEventListener('click',async()=>{
   if(isExporting()){showToast('请先完成或取消 MP4 导出。',true);return;}
-  try{if(!await saveProjectNow(false))throw new Error("当前项目尚未保存");const response=await fetch('/api/service/shutdown',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw new Error(result.error);operatorSubscription?.();document.getElementById('exitServiceLite').disabled=true;setSaveState('服务已退出');showToast('本地服务已退出。点击 Film Space Lite 图标可重新打开。');}catch(error){showToast('退出失败：'+error.message,true);}
+  try{if(!await saveProjectNow(false))throw new Error("当前项目尚未保存");const response=await fetch('/api/service/shutdown',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw new Error(result.error);operatorSubscription?.();updateUI.stop();document.getElementById('exitServiceLite').disabled=true;setSaveState('服务已退出');showToast('本地服务已退出。点击 Film Space Lite 图标可重新打开。');}catch(error){showToast('退出失败：'+error.message,true);}
 });
 window.addEventListener('pagehide',()=>{if(exportState.taskID&&exportState.status==='rendering')navigator.sendBeacon('/api/exports/'+encodeURIComponent(exportState.taskID),new Blob(['{}'],{type:'application/json'}));});
 
@@ -9921,3 +9927,26 @@ function jumpActorPoseFrame(direction) {
   const key=direction==='previous'?[...keys].reverse().find(key=>key.time<playback.elapsed-0.0001):keys.find(key=>key.time>playback.elapsed+0.0001);
   if(key)selectActorPoseFrame(actor.id,key.id);
 }
+
+
+function updateActivity() {
+  const editingField = document.activeElement?.matches('input, textarea, select, [contenteditable="true"]');
+  const unsaved = Boolean(editingField || elements.projectState.classList.contains('error') || projectDirty || semanticOperationQueue.active || !semanticOperationQueue.lastDrainSucceeded
+    || actorPoseDraft || cameraEditSession.edit || cameraOrbitDraft || transformBaseProject || pathPointBaseProject
+    || cameraKeyframeBaseProject || cameraAimBaseProject);
+  const dialogOpen = [...document.querySelectorAll('dialog[open]')].some(dialog => !['shortcutsDialog', 'updateProgressDialog'].includes(dialog.id));
+  const busy = unsaved || environmentImporting || projectManagementBusy || Boolean(blockoutImageImportTarget) || isExporting() || playback.status === 'playing'
+    || dialogOpen || elements.appShell.getAttribute('aria-busy') === 'true';
+  return {busy, unsaved, reason: unsaved ? '请先保存当前编辑和机位草稿。' : busy ? '页面有正在进行的操作。' : ''};
+}
+const updateUI = startUpdateUI({
+  readActivity: updateActivity,
+  currentProjectID: () => project.id,
+  setLocked: value => { appUpdateLocked = value; elements.appShell.inert = value; },
+  saveBeforeUpdate: async () => {
+    if (isExporting() || playback.status === 'playing' || environmentImporting || projectManagementBusy || blockoutImageImportTarget) throw new Error('请先结束播放、导入或导出。');
+    if (!await saveProjectNow(false)) throw new Error('项目尚未保存，暂缓更新。');
+    const activity = updateActivity();
+    if (activity.busy) throw new Error(activity.reason);
+  },
+});

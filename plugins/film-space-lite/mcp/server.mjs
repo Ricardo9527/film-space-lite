@@ -789,7 +789,9 @@ function textResult(text, structuredContent) {
 }
 
 async function ensureDirectorService() {
-  if (await serviceHealthy()) return;
+  const initialStatus = await serviceStatus();
+  if (initialStatus?.status === 'updating') throw new Error('Film Space Lite is installing an update. Retry after it restarts.');
+  if (initialStatus?.status === 'ok' && initialStatus.projectWritable === true) return;
   if (startingService) return startingService;
   startingService = (async () => {
     const directorRoot = resolveDirectorRoot();

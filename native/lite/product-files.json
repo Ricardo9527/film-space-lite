@@ -52,7 +52,11 @@
   "director-console/app/shot-output-session.js",
   "director-console/app/ui-operation-history.js",
   "director-console/app/update-checker.cjs",
+  "director-console/app/update-installer.cjs",
+  "director-console/app/update-manager.cjs",
   "director-console/app/update-notice.js",
+  "director-console/app/update-package.cjs",
+  "director-console/app/update-transport.cjs",
   "director-console/index.html",
   "director-console/package.json",
   "director-console/server.cjs",
@@ -63,8 +67,10 @@
   "director-console/vendor/three/three.module.js",
   "director-console/vendor/three/utils/BufferGeometryUtils.js",
   "director-console/vendor/three/utils/SkeletonUtils.js",
+  "native/lite/update-public-key.json",
   "native/lite/version.json",
   "plugins/film-space-lite/mcp/server.mjs",
   "plugins/film-space-lite/mcp/service-discovery.mjs",
+  "scripts/apply-film-space-lite-update.cjs",
   "scripts/launch-film-space-lite.mjs"
 ]

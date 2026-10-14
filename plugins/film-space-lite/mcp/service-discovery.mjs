@@ -10,6 +10,6 @@ export async function discoverDirectorService({serviceFile=process.env.FILM_SPAC
  if(endpoint.service!=='film-space-lite'||!Number.isInteger(endpoint.port)||endpoint.port<1||endpoint.port>65535||!Number.isInteger(endpoint.pid))throw new Error('Invalid Film Space Lite service descriptor: '+serviceFile);
  const baseURL='http://127.0.0.1:'+endpoint.port;
  let health;try{const response=await fetch(baseURL+'/health',{signal:AbortSignal.timeout(1000)});if(!response.ok)return null;health=await response.json();}catch(error){if(error.name==='TypeError'||error.name==='TimeoutError')return null;throw error;}
- if(health.service!=='film-space-lite'||health.pid!==endpoint.pid||health.port!==endpoint.port||health.status!=='ok')return null;
+ if(health.service!=='film-space-lite'||health.pid!==endpoint.pid||health.port!==endpoint.port||!['ok','updating'].includes(health.status))return null;
  return {baseURL,health};
 }

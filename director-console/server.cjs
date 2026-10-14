@@ -5,6 +5,8 @@ const {litePaths}=require('./app/lite-runtime.cjs');
 const {createProjectRepository}=require('./app/project-repository.cjs');
 const {createExportManager}=require('./app/export-manager.cjs');
 const updateChecker=require('./app/update-checker.cjs').createUpdateChecker();
+const {createUpdateManager}=require('./app/update-manager.cjs');
+const appVersion=require('../native/lite/version.json').version;
 const paths=litePaths();
 const PROJECT_ROOT=process.env.FILM_SPACE_PROJECT_DIR||paths.projects;
 const INDEX=path.join(__dirname,'index.html'),VENDOR_ROOT=path.join(__dirname,'vendor'),ASSETS_ROOT=path.join(__dirname,'assets'),APP_ROOT=path.join(__dirname,'app');
@@ -13,21 +15,47 @@ const projectRepository=createProjectRepository(PROJECT_ROOT),projectStorageStat
 const operatorEventClients=new Set(),operatorSelections=new Map(),pendingViewportCaptures=new Map(),pendingPlayheadRequests=new Map();
 let projectCommandServicePromise=null,projectModelPromise=null;
 const exportTouches=new Map();
-const server=http.createServer((req,res)=>handleHTTPRequest(req,res).catch(error=>handleHTTPRequestError(req,res,error)));
+let activeBusinessRequests=0;
+const updater=createUpdateManager({checker:updateChecker,runtime:path.resolve(__dirname,'..'),dataRoot:paths.root,
+ projectRoot:PROJECT_ROOT,serviceFile:process.env.FILM_SPACE_SERVICE_FILE||paths.service,getPort:()=>server.address().port,
+ busyReason:()=>activeBusinessRequests?'后台操作正在执行。':exportManager.activeCount()?'MP4 正在导出。':pendingViewportCaptures.size||pendingPlayheadRequests.size?'MCP 画面操作正在执行。':null,
+ onCommit:()=>shutdownDirector()});
+const server=http.createServer((req,res)=>dispatchHTTPRequest(req,res).catch(error=>handleHTTPRequestError(req,res,error)));
+async function dispatchHTTPRequest(req,res){
+ const pathname=new URL(req.url,'http://127.0.0.1').pathname;
+ const business=pathname.startsWith('/api/')&&!pathname.startsWith('/api/app/update')&&pathname!=='/api/operator/events';
+ if(business&&updater.isGated()){sendJSON(res,503,{error:'软件正在更新，请稍后重试。',code:'ERR_APP_UPDATING'});return;}
+ if(business){activeBusinessRequests++;if(req.method!=='GET')updater.activity();}
+ try{await handleHTTPRequest(req,res);}finally{if(business){activeBusinessRequests--;if(req.method!=='GET')updater.activity();}}
+}
 async function handleHTTPRequest(req,res){
  const pathname=new URL(req.url,'http://127.0.0.1').pathname;
- if(pathname==='/api/app/update'&&['GET','POST'].includes(req.method)){
+ if(pathname.startsWith('/api/app/update')){
   requireLocalOutputRequest(req);
-  const force=new URL(req.url,'http://127.0.0.1').searchParams.get('force')==='1';
-  sendJSON(res,200,req.method==='POST'?await updateChecker.check({force}):updateChecker.snapshot());return;
+  if(req.headers.origin&&new URL(req.headers.origin).port!==String(server.address().port)){sendJSON(res,403,{error:'更新操作只接受本机应用页面。'});return;}
+  if(pathname==='/api/app/update'&&req.method==='GET'){sendJSON(res,200,updater.snapshot());return;}
+  if(pathname==='/api/app/update'&&req.method==='POST'){sendJSON(res,200,await updater.check(new URL(req.url,'http://127.0.0.1').searchParams.get('force')==='1'));return;}
+  if(pathname==='/api/app/update/events'&&req.method==='GET'){updater.attach(new URL(req.url,'http://127.0.0.1').searchParams.get('clientID')||'',res);return;}
+  if(req.method==='POST'){
+   const body=JSON.parse(await readRequestBody(req));
+   if(pathname==='/api/app/update/activity'){updater.report(body.clientID,body);sendJSON(res,200,{ok:true});return;}
+   if(pathname==='/api/app/update/release'){updater.release(body.clientID);sendJSON(res,200,{ok:true});return;}
+   if(pathname==='/api/app/update/ack'){updater.ack(body.clientID,body.token,body);sendJSON(res,200,{ok:true});return;}
+   if(pathname==='/api/app/update/install'){try{sendJSON(res,202,await updater.installNow(body.clientID));}catch(error){error.statusCode=409;throw error;}return;}
+  }
+  sendJSON(res,404,{error:'Unknown update operation'});return;
  }
- if(pathname==='/health'){sendJSON(res,200,{service:'film-space-lite',edition:'lite',status:'ok',port:server.address().port,pid:process.pid,runtimeMode:RUNTIME_MODE,projectWritable:projectStorageStatus.writable,projectStorageErrorCode:projectStorageStatus.errorCode});return;}
+ if(pathname==='/health'){sendJSON(res,200,{service:'film-space-lite',edition:'lite',appVersion,status:updater.isGated()?'updating':'ok',port:server.address().port,pid:process.pid,runtimeMode:RUNTIME_MODE,projectWritable:projectStorageStatus.writable,projectStorageErrorCode:projectStorageStatus.errorCode});return;}
  if(pathname==='/api/service/shutdown'&&req.method==='POST'){
   requireLocalOutputRequest(req);
   if(exportManager.activeCount()){const error=new Error('请先完成或取消 MP4 导出。');error.statusCode=409;throw error;}
   sendJSON(res,200,{stopping:true});setImmediate(()=>shutdownDirector());return;
  }
  if(await handleOutputAPI(req,res,pathname)||await handleProjectAPI(req,res,pathname))return;
+ if((pathname==='/'||pathname==='/index.html')&&updater.isGated()){
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+  res.end('<!doctype html><meta charset="utf-8"><title>Film Space Lite 正在更新</title><body style="background:#121519;color:#d6d7d4;font:16px system-ui;padding:48px"><h1>正在更新 Film Space Lite</h1><p>完成后自动返回项目。</p><script>setInterval(async()=>{try{const r=await fetch("/api/app/update");if(r.ok&&!['+JSON.stringify('preparing')+','+JSON.stringify('installing')+'].includes((await r.json()).phase))location.reload()}catch{}},1500)</script></body>');return;
+ }
  if(pathname==='/'||pathname==='/index.html'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});res.end(fs.readFileSync(INDEX));return;}
  for(const [prefix,root] of [['/vendor/',VENDOR_ROOT],['/assets/',ASSETS_ROOT],['/app/',APP_ROOT]])if(pathname.startsWith(prefix)){serveStatic(req,res,prefix,root);return;}
  sendJSON(res,404,{error:'Not found'});
@@ -955,6 +983,7 @@ function sendJSON(res, statusCode, value) {
   res.end(JSON.stringify(value));
 }
 function shutdownDirector(){
+ updater.stop();
  clearInterval(exportExpiry);
  for(const response of operatorEventClients)response.end();
  server.close(()=>{const descriptor=process.env.FILM_SPACE_SERVICE_FILE||paths.service;try{const data=JSON.parse(fs.readFileSync(descriptor,'utf8'));if(data.pid===process.pid)fs.unlinkSync(descriptor);}catch(error){if(error.code!=='ENOENT')console.error(error);}process.exit(0);});
@@ -968,5 +997,6 @@ server.listen(PORT,HOST,()=>{
  const temporary=descriptor+'.'+process.pid+'.tmp';
  fs.writeFileSync(temporary,JSON.stringify({version:1,service:'film-space-lite',runtimeMode:RUNTIME_MODE,port:server.address().port,pid:process.pid})+'\n',{mode:0o600});fs.renameSync(temporary,descriptor);
  console.log('Film Space Lite: http://127.0.0.1:'+server.address().port);
+ updater.start().catch(error=>console.error('[updater]',error));
 });
 process.on('SIGTERM',shutdownDirector);process.on('SIGINT',shutdownDirector);
