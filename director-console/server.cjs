@@ -4,6 +4,7 @@ const {spawn}=require('node:child_process');
 const {litePaths}=require('./app/lite-runtime.cjs');
 const {createProjectRepository}=require('./app/project-repository.cjs');
 const {createExportManager}=require('./app/export-manager.cjs');
+const updateChecker=require('./app/update-checker.cjs').createUpdateChecker();
 const paths=litePaths();
 const PROJECT_ROOT=process.env.FILM_SPACE_PROJECT_DIR||paths.projects;
 const INDEX=path.join(__dirname,'index.html'),VENDOR_ROOT=path.join(__dirname,'vendor'),ASSETS_ROOT=path.join(__dirname,'assets'),APP_ROOT=path.join(__dirname,'app');
@@ -15,6 +16,11 @@ const exportTouches=new Map();
 const server=http.createServer((req,res)=>handleHTTPRequest(req,res).catch(error=>handleHTTPRequestError(req,res,error)));
 async function handleHTTPRequest(req,res){
  const pathname=new URL(req.url,'http://127.0.0.1').pathname;
+ if(pathname==='/api/app/update'&&['GET','POST'].includes(req.method)){
+  requireLocalOutputRequest(req);
+  const force=new URL(req.url,'http://127.0.0.1').searchParams.get('force')==='1';
+  sendJSON(res,200,req.method==='POST'?await updateChecker.check({force}):updateChecker.snapshot());return;
+ }
  if(pathname==='/health'){sendJSON(res,200,{service:'film-space-lite',edition:'lite',status:'ok',port:server.address().port,pid:process.pid,runtimeMode:RUNTIME_MODE,projectWritable:projectStorageStatus.writable,projectStorageErrorCode:projectStorageStatus.errorCode});return;}
  if(pathname==='/api/service/shutdown'&&req.method==='POST'){
   requireLocalOutputRequest(req);

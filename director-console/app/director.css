@@ -8365,3 +8365,19 @@ select.fs-select-native {
 .actor-pose-keyframe-marker {z-index:6;background:var(--accent);}
 
 .timeline-icon-button.timeline-record-button { display: inline-flex; align-items: center; gap: 5px; width: auto; padding: 0 8px; white-space: nowrap; }
+
+/* App maintenance stays outside the render/export surface. */
+body { display: flex; flex-direction: column; }
+body > .app-shell { flex: 1; min-height: 0; height: auto; }
+.update-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 8px 14px; background: #243446; border-bottom: 1px solid var(--line); font-size: 13px; }
+.update-notice[hidden], .app-update-help [hidden] { display: none; }
+.update-notice a, .app-update-help a { color: #a9d8ff; text-decoration: underline; }
+.update-notice button { margin-left: auto; background: #35495f; color: var(--text); padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.app-update-help { padding: 0 0 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.app-update-help > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.app-update-help p { color: var(--text-secondary); font-size: 13px; }
+.app-update-help pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; max-height: 160px; overflow: auto; }
+.update-notice a:focus-visible, .app-update-help a:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+.shortcuts-dialog .film-dialog-panel { max-height: calc(100vh - 34px); grid-template-rows: auto minmax(0, 1fr) auto; }
+.shortcuts-content { overflow: auto; min-height: 0; padding: 18px 24px; }
