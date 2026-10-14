@@ -468,6 +468,7 @@ export class DirectorRenderer {
     }, { capture: true, passive: false });
 
     this.renderer.domElement.addEventListener("pointerdown", (event) => {
+      this.renderer.domElement.focus({ preventScroll: true });
       if (this.focusPicking && event.button === 0) {
         const focusPick = this.pickShotFocus(event);
         if (focusPick) {
@@ -3943,8 +3944,11 @@ export class DirectorRenderer {
 function shouldIgnoreCameraKey(event) {
   if (event.metaKey || event.ctrlKey || event.altKey) return true;
   const target = event.target;
-  return target instanceof HTMLElement
-    && (["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable);
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')) return true;
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable) return true;
+  // 普通按钮保留方向键导航，但不阻断 WASD / Q / E 镜头平移。
+  return target.tagName === "BUTTON" && !translationCameraKeyCodes.has(event.code);
 }
 
 function createCameraTrackPath(poses) {
