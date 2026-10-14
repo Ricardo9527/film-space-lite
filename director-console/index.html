@@ -82,7 +82,7 @@
               <button id="shotView" type="button" aria-pressed="false" disabled>Shot View</button>
               <div id="cameraSpeedControl" class="camera-speed-control" title="调整视口移动速度；按住 Shift 临时减速。">
                 <label for="cameraSpeedMultiplier">Camera Speed</label>
-                <span class="camera-speed-value">×<input id="cameraSpeedMultiplier" type="number" min="0.1" max="100" step="0.1" value="1" required aria-label="Camera Speed 倍率" /></span>
+                <span class="camera-speed-value">×<input id="cameraSpeedMultiplier" type="number" min="0.1" max="100" step="any" data-scrub-step="0.1" value="1" required aria-label="Camera Speed 倍率" /></span>
                 <span class="camera-speed-fine" hidden title="Shift 精调：当前倍率的 20%">Fine</span>
                 <button class="camera-speed-toggle" type="button" aria-label="Camera Speed 快选" aria-expanded="false" aria-controls="cameraSpeedPanel">▾</button>
                 <div id="cameraSpeedPanel" class="camera-speed-panel" hidden>
@@ -139,7 +139,7 @@
               <label class="path-height-input">
                 <span class="sr-only">Y 高度</span>
                 <span class="input-with-unit">
-                  <input id="pathHeightInput" type="number" step="0.05"
+                  <input id="pathHeightInput" type="number" step="any" data-scrub-step="0.05"
                     aria-label="所选路径点 Y 高度（米）" />
                   <span>m</span>
                 </span>
@@ -400,7 +400,7 @@
           <label for="newProjectFrameRate">帧率</label>
           <select id="newProjectFrameRate" required></select>
           <label for="newProjectDuration">时长（秒）</label>
-          <input id="newProjectDuration" type="number" min="0.2" max="3600" step="0.1" value="20" required />
+          <input id="newProjectDuration" type="number" min="0.2" max="3600" step="any" data-scrub-step="0.1" value="20" required />
         </div>
         <footer class="film-dialog-footer">
           <button id="newProjectCancel" class="secondary-button" type="button">取消</button>

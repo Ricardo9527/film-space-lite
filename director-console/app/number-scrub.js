@@ -3,7 +3,7 @@
 // 就只剩原生上下箭头 —— 规则写着"一律"，实现却按文件边界漏了。搬到这里，三个模块共用一份。
 //
 // 这里只放不碰应用状态的部分：wireNumberScrub 是纯指针拖拽，wireInputNumberScrub 只读
-// input 自己的 step/min/max。要在拖动过程中改项目并进历史的那层（wireProjectNumberScrub）
+// input 的拖动步长（data-scrub-step 或 step）与 min/max。要在拖动过程中改项目并进历史的那层（wireProjectNumberScrub）
 // 依赖 history / project / syncRenderer，留在 director-app.js。
 
 export function wireNumberScrub(input, options) {
@@ -110,7 +110,7 @@ export function wireInputNumberScrub(input, options = {}) {
   if (!input) return;
   (input.closest("label") || input.closest(".input-with-unit") || input.parentElement)
     ?.classList.add("scrubbable-input");
-  const step = Math.max(Math.abs(Number(input.step)) || Number(options.step) || 0.01, 0.000001);
+  const step = Math.max(Math.abs(Number(input.dataset.scrubStep ?? input.step)) || Number(options.step) || 0.01, 0.000001);
   const minimum = input.hasAttribute("min") && Number.isFinite(Number(input.min))
     ? Number(input.min)
     : -Infinity;

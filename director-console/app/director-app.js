@@ -5531,7 +5531,7 @@ function renderCameraTimeline() {
         <i class="timeline-cluster-sep" aria-hidden="true"></i>
         <div class="timeline-scene-end" role="group" aria-label="Scene End">
           <label for="timelineSceneEnd">END</label>
-          <div class="input-with-unit"><input id="timelineSceneEnd" type="number" min="0.2" max="3600" step="0.1" value="${duration.toFixed(1)}" ${canAuthor() ? "" : "disabled"} /><span>s</span></div>
+          <div class="input-with-unit"><input id="timelineSceneEnd" type="number" min="0.2" max="3600" step="any" data-scrub-step="0.1" value="${duration.toFixed(1)}" ${canAuthor() ? "" : "disabled"} /><span>s</span></div>
         </div>
       </div>
       <div id="timelineSelection" class="timeline-selection" aria-live="polite"></div>
@@ -7004,10 +7004,10 @@ function renderActorInspector(actor) {
       <div class="inspector-disclosure-content">
       <p class="section-caption">平移人物和整条走位路径</p>
       <div class="transform-field-grid two-column">
-        <label><span>X</span><input data-actor-position="x" type="number" step="0.05" value="${Number(actor.position.x).toFixed(2)}" /></label>
-        <label><span>Y</span><input data-actor-position="y" type="number" step="0.05" value="${Number(actor.position.y).toFixed(2)}" /></label>
-        <label><span>Z</span><input data-actor-position="z" type="number" step="0.05" value="${Number(actor.position.z).toFixed(2)}" /></label>
-        <label><span>初始面向</span><div class="input-with-unit"><input id="actorInitialFacing" aria-label="初始面向（度）" type="number" min="-360" max="360" step="0.1" required value="${(actor.rotationY*180/Math.PI).toFixed(1)}" /><span>°</span></div></label>
+        <label><span>X</span><input data-actor-position="x" type="number" step="any" data-scrub-step="0.05" value="${Number(actor.position.x).toFixed(2)}" /></label>
+        <label><span>Y</span><input data-actor-position="y" type="number" step="any" data-scrub-step="0.05" value="${Number(actor.position.y).toFixed(2)}" /></label>
+        <label><span>Z</span><input data-actor-position="z" type="number" step="any" data-scrub-step="0.05" value="${Number(actor.position.z).toFixed(2)}" /></label>
+        <label><span>初始面向</span><div class="input-with-unit"><input id="actorInitialFacing" aria-label="初始面向（度）" type="number" min="-360" max="360" step="any" data-scrub-step="0.1" required value="${(actor.rotationY*180/Math.PI).toFixed(1)}" /><span>°</span></div></label>
       </div>
       </div>
     </details>
@@ -7024,10 +7024,10 @@ function renderActorInspector(actor) {
       </div>
       <p class="section-caption">当前时刻记帧，偏移与朝向归零；从上个关键帧过渡</p>
       <div class="transform-field-grid two-column">
-        <label><span>朝向偏移</span><div class="input-with-unit"><input id="actorRotationY" aria-label="朝向偏移（度）" data-actor-pose="rotationYOffset" type="number" min="-360" max="360" step="0.1" required value="${(pose.rotationYOffset * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
+        <label><span>朝向偏移</span><div class="input-with-unit"><input id="actorRotationY" aria-label="朝向偏移（度）" data-actor-pose="rotationYOffset" type="number" min="-360" max="360" step="any" data-scrub-step="0.1" required value="${(pose.rotationYOffset * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
       </div>
       ${`<div class="transform-field-grid two-column">
-        ${[["rotationX", "前后倾斜"], ["rotationZ", "左右倾斜"]].map(([key, label]) => `<label><span>${label}</span><div class="input-with-unit"><input data-actor-pose="${key}" type="number" min="-360" max="360" step="0.1" required value="${(pose[key] * 180 / Math.PI).toFixed(1)}" aria-label="${label}（度）" /><span>°</span></div></label>`).join("")}
+        ${[["rotationX", "前后倾斜"], ["rotationZ", "左右倾斜"]].map(([key, label]) => `<label><span>${label}</span><div class="input-with-unit"><input data-actor-pose="${key}" type="number" min="-360" max="360" step="any" data-scrub-step="0.1" required value="${(pose[key] * 180 / Math.PI).toFixed(1)}" aria-label="${label}（度）" /><span>°</span></div></label>`).join("")}
       </div>`}
       <div class="actor-pose-frame-actions">
         <button id="recordActorPoseInspector" class="primary-button" type="button">添加人物帧</button>
@@ -7039,7 +7039,7 @@ function renderActorInspector(actor) {
         <div class="transform-field-grid two-column">
         ${Object.entries(actorPoseParameters).filter(([key])=>!['rotationYOffset','rotationX','rotationZ','offsetX','offsetY','offsetZ'].includes(key)).map(([key,spec])=>{
           const scale=spec.unit==='angle'?180/Math.PI:1;
-          return `<label><span>${spec.label}</span><div class="input-with-unit"><input data-actor-pose="${key}" type="number" required min="${spec.min*scale}" max="${spec.max*scale}" step="${spec.unit==='angle'?'0.1':spec.unit==='meters'?'0.001':'0.01'}" value="${(pose[key]*scale).toFixed(spec.unit==='angle'?1:spec.unit==='meters'?3:2)}" /><span>${spec.unit==='angle'?'°':spec.unit==='meters'?'m':'×'}</span></div></label>`;
+          return `<label><span>${spec.label}</span><div class="input-with-unit"><input data-actor-pose="${key}" type="number" required min="${spec.min*scale}" max="${spec.max*scale}" step="any" data-scrub-step="${spec.unit==='angle'?'0.1':spec.unit==='meters'?'0.001':'0.01'}" value="${(pose[key]*scale).toFixed(spec.unit==='angle'?1:spec.unit==='meters'?3:2)}" /><span>${spec.unit==='angle'?'°':spec.unit==='meters'?'m':'×'}</span></div></label>`;
         }).join('')}
         <label><span>过渡方式</span><select id="actorPoseInterpolation">${['smooth','ease-in-out','linear'].map((kind,i)=>`<option value="${kind}" ${actor.poseTrack.interpolation===kind?'selected':''}>${['平滑','缓入缓出','线性'][i]}</option>`).join('')}</select></label>
         </div>
@@ -7070,7 +7070,7 @@ function renderActorInspector(actor) {
         </div>`}
         <div class="field">
           <div class="field-heading"><label for="actorScale">身高比例</label><span id="actorScaleValue" class="field-value">${actor.scale.toFixed(2)}×</span></div>
-          <label><span class="sr-only">身高比例数值</span><input id="actorScale" type="number" min="0.5" max="2" step="0.01" value="${actor.scale.toFixed(2)}" /></label>
+          <label><span class="sr-only">身高比例数值</span><input id="actorScale" type="number" min="0.5" max="2" step="any" data-scrub-step="0.01" value="${actor.scale.toFixed(2)}" /></label>
         </div>
       </div>
     </details>
@@ -7387,11 +7387,11 @@ function renderMotionRows(actor) {
         ${""}
         <div class="motion-control motion-timing-control">
           <span class="input-with-unit motion-number">
-            <input data-action-value="speed" data-action-id="${escapeHTML(action.id)}" type="number" min="0.05" max="20" step="0.05" value="${action.speed.toFixed(2)}" aria-label="移动速度（米每秒）" />
+            <input data-action-value="speed" data-action-id="${escapeHTML(action.id)}" type="number" min="0.05" max="20" step="any" data-scrub-step="0.05" value="${action.speed.toFixed(2)}" aria-label="移动速度（米每秒）" />
             <span>m/s</span>
           </span>
           <span class="input-with-unit motion-number">
-            <input data-move-duration="${escapeHTML(action.id)}" type="number" min="0.05" max="3600" step="0.05" value="${timing.totalDuration.toFixed(2)}" aria-label="这段移动的时长（秒）" />
+            <input data-move-duration="${escapeHTML(action.id)}" type="number" min="0.05" max="3600" step="any" data-scrub-step="0.05" value="${timing.totalDuration.toFixed(2)}" aria-label="这段移动的时长（秒）" />
             <span>s</span>
           </span>
           ${""}
@@ -7441,14 +7441,14 @@ function renderMotionRows(actor) {
         </label>
         ${action.posture === "sit" ? `<label class="motion-control blocking-posture-control">座位高度
           <span class="input-with-unit motion-number">
-            <input data-action-value="seatHeight" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="2" step="0.01" value="${action.seatHeight.toFixed(2)}" aria-label="座位高度（米，人物缩放前）" />
+            <input data-action-value="seatHeight" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="2" step="any" data-scrub-step="0.01" value="${action.seatHeight.toFixed(2)}" aria-label="座位高度（米，人物缩放前）" />
             <span>m</span>
           </span>
         </label>` : ""}`}
         <div class="motion-control motion-timing-control">
           ${""}
           <span class="input-with-unit motion-number">
-            <input data-action-value="duration" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="3600" step="0.1" value="${action.duration.toFixed(2)}" aria-label="${"停留"}时长（秒）" />
+            <input data-action-value="duration" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="3600" step="any" data-scrub-step="0.1" value="${action.duration.toFixed(2)}" aria-label="${"停留"}时长（秒）" />
             <span>s</span>
           </span>
           ${""}
@@ -7456,7 +7456,7 @@ function renderMotionRows(actor) {
         <div class="facing-editor">
           <div class="facing-command-row ${hasNextMove ? "has-next" : ""}">
             <div class="input-with-unit motion-number facing-angle-field ${facingInherited ? "inherited" : ""}">
-              <input data-facing-angle="${escapeHTML(action.id)}" type="number" step="1" value="${facingDegrees}" aria-label="${"停留"}朝向（度）" />
+              <input data-facing-angle="${escapeHTML(action.id)}" type="number" step="any" data-scrub-step="1" value="${facingDegrees}" aria-label="${"停留"}朝向（度）" />
               <span>°</span>
             </div>
             <button class="compact-button facing-inherit-button ${facingInherited ? "active" : ""}" type="button" data-action-id="${escapeHTML(action.id)}" data-facing-step="0" aria-pressed="${facingInherited}" title="恢复继承朝向">继承</button>
@@ -7602,9 +7602,9 @@ function renderVisualEnvironmentObjectInspector() {
       <h2 class="section-title">变换</h2>
       ${renderVectorFields("environment-position", transform.position, ["x", "y", "z"], parentGroup ? "组内位置" : "位置")}
       <div class="transform-field-grid environment-orientation-grid">
-        <label><span>水平旋转</span><div class="input-with-unit"><input id="environmentObjectYaw" type="number" step="1" value="${rotation.yaw.toFixed(1)}" /><span>°</span></div></label>
-        <label><span>垂直旋转</span><div class="input-with-unit"><input id="environmentObjectPitch" type="number" step="1" value="${rotation.pitch.toFixed(1)}" /><span>°</span></div></label>
-        <label><span>统一缩放</span><input id="environmentObjectScale" type="number" min="0.001" max="1000" step="0.01" value="${Number(transform.uniformScale).toFixed(3)}" /></label>
+        <label><span>水平旋转</span><div class="input-with-unit"><input id="environmentObjectYaw" type="number" step="any" data-scrub-step="1" value="${rotation.yaw.toFixed(1)}" /><span>°</span></div></label>
+        <label><span>垂直旋转</span><div class="input-with-unit"><input id="environmentObjectPitch" type="number" step="any" data-scrub-step="1" value="${rotation.pitch.toFixed(1)}" /><span>°</span></div></label>
+        <label><span>统一缩放</span><input id="environmentObjectScale" type="number" min="0.001" max="1000" step="any" data-scrub-step="0.01" value="${Number(transform.uniformScale).toFixed(3)}" /></label>
       </div>
     </section>
     <section class="inspector-section">
@@ -7781,9 +7781,9 @@ function renderVisualEnvironmentGroupInspector() {
       <h2 class="section-title">组变换</h2>
       ${renderVectorFields("environment-group-position", transform.position, ["x", "y", "z"], "位置")}
       <div class="transform-field-grid environment-orientation-grid">
-        <label><span>水平旋转</span><div class="input-with-unit"><input id="environmentGroupYaw" type="number" step="1" value="${rotation.yaw.toFixed(1)}" /><span>°</span></div></label>
-        <label><span>垂直旋转</span><div class="input-with-unit"><input id="environmentGroupPitch" type="number" step="1" value="${rotation.pitch.toFixed(1)}" /><span>°</span></div></label>
-        <label><span>统一缩放</span><input id="environmentGroupScale" type="number" min="0.001" max="1000" step="0.01" value="${Number(transform.uniformScale).toFixed(3)}" /></label>
+        <label><span>水平旋转</span><div class="input-with-unit"><input id="environmentGroupYaw" type="number" step="any" data-scrub-step="1" value="${rotation.yaw.toFixed(1)}" /><span>°</span></div></label>
+        <label><span>垂直旋转</span><div class="input-with-unit"><input id="environmentGroupPitch" type="number" step="any" data-scrub-step="1" value="${rotation.pitch.toFixed(1)}" /><span>°</span></div></label>
+        <label><span>统一缩放</span><input id="environmentGroupScale" type="number" min="0.001" max="1000" step="any" data-scrub-step="0.01" value="${Number(transform.uniformScale).toFixed(3)}" /></label>
       </div>
     </section>
     ${supportsMaterialMode ? `<section class="inspector-section">
@@ -7900,8 +7900,8 @@ function renderBlockoutGroupInspector(group) {
       <h2 class="section-title">变换</h2>
       ${renderVectorFields("blockout-group-position", group.position, ["x", "y", "z"], "位置")}
       <div class="transform-field-grid two-column">
-        <label><span>水平旋转</span><div class="input-with-unit"><input id="blockoutGroupYaw" type="number" step="1" value="${(group.rotationY * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
-        <label><span>统一缩放</span><input id="blockoutGroupScale" type="number" min="0.01" max="1000" step="0.01" value="${Number(group.scale).toFixed(3)}" /></label>
+        <label><span>水平旋转</span><div class="input-with-unit"><input id="blockoutGroupYaw" type="number" step="any" data-scrub-step="1" value="${(group.rotationY * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
+        <label><span>统一缩放</span><input id="blockoutGroupScale" type="number" min="0.01" max="1000" step="any" data-scrub-step="0.01" value="${Number(group.scale).toFixed(3)}" /></label>
       </div>
       ${renderOpacityField("blockoutGroupOpacity", opacity, "组透明度")}
     </section>`;
@@ -8000,12 +8000,12 @@ function renderBlockoutImageInspector(object) {
       <p class="section-caption">${escapeHTML(image.asset.sourceName)}</p>
       ${renderVectorFields("blockout-image-position", image.position, ["x", "y", "z"], "贴图位置", "m")}
       <div class="transform-field-grid two-column">
-        <label><span>宽度（m）</span><input id="blockoutImageWidth" type="number" min="0.001" step="0.01" value="${image.width}" /></label>
-        <label><span>高度（m）</span><input id="blockoutImageHeight" type="number" min="0.001" step="0.01" value="${image.height}" /></label>
+        <label><span>宽度（m）</span><input id="blockoutImageWidth" type="number" min="0.001" step="any" data-scrub-step="0.01" value="${image.width}" /></label>
+        <label><span>高度（m）</span><input id="blockoutImageHeight" type="number" min="0.001" step="any" data-scrub-step="0.01" value="${image.height}" /></label>
       </div>
       ${renderVectorFields("blockout-image-rotation", Object.fromEntries(Object.entries(image.rotation).map(([k,v]) => [k, v * 180 / Math.PI])), ["x", "y", "z"], "贴图旋转", "°")}
       <details><summary>裁切原图</summary><div class="transform-field-grid two-column">
-        ${[["x","左侧起点"],["y","顶部起点"],["width","保留宽度"],["height","保留高度"]].map(([key,label]) => `<label><span>${label}（%）</span><input data-image-crop="${key}" type="number" min="${key === "x" || key === "y" ? 0 : 0.01}" max="100" step="0.1" value="${Number((image.crop[key]*100).toFixed(3))}" /></label>`).join("")}
+        ${[["x","左侧起点"],["y","顶部起点"],["width","保留宽度"],["height","保留高度"]].map(([key,label]) => `<label><span>${label}（%）</span><input data-image-crop="${key}" type="number" min="${key === "x" || key === "y" ? 0 : 0.01}" max="100" step="any" data-scrub-step="0.1" value="${Number((image.crop[key]*100).toFixed(3))}" /></label>`).join("")}
       </div></details>
       <button id="blockoutImageRemove" type="button" class="secondary-button full-width-button">移除贴图</button>` : `<p class="section-caption">PNG、JPEG 或 WebP。透明 PNG 可用作动物标志，图片跟随对象一起移动和显隐。</p>`}
   </section>`;
@@ -8073,8 +8073,8 @@ function renderBlockoutObjectInspector(group, object) {
       <h2 class="section-title">变换</h2>
       ${renderVectorFields("blockout-object-position", object.position, ["x", "y", "z"], "位置")}
       <div class="transform-field-grid two-column">
-        <label><span>水平旋转</span><div class="input-with-unit"><input id="blockoutObjectYaw" type="number" step="1" value="${(object.rotationY * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
-        <label><span>统一缩放</span><input id="blockoutObjectScale" type="number" min="0.01" max="1000" step="0.01" value="${Number(object.scale).toFixed(3)}" /></label>
+        <label><span>水平旋转</span><div class="input-with-unit"><input id="blockoutObjectYaw" type="number" step="any" data-scrub-step="1" value="${(object.rotationY * 180 / Math.PI).toFixed(1)}" /><span>°</span></div></label>
+        <label><span>统一缩放</span><input id="blockoutObjectScale" type="number" min="0.01" max="1000" step="any" data-scrub-step="0.01" value="${Number(object.scale).toFixed(3)}" /></label>
       </div>
     </section>
     <section class="inspector-section">
@@ -8154,7 +8154,7 @@ function renderVectorFields(key, vector, axes, label, unit = "", options = {}) {
     <div class="object-vector-field">
       <span>${label}</span>
       <div class="transform-field-grid">
-        ${axes.map((axis) => `<label><span>${axis.toUpperCase()}</span><div class="${unit ? "input-with-unit" : ""}"><input data-vector-field="${key}" data-vector-axis="${axis}" type="number" ${Number.isFinite(options.minimum) ? `min="${options.minimum}"` : ""} step="${unit === "°" ? "1" : "0.05"}" value="${Number(vector[axis] || 0).toFixed(unit === "°" ? 1 : 2)}" ${options.disabled ? "disabled" : ""} />${unit ? `<span>${unit}</span>` : ""}</div></label>`).join("")}
+        ${axes.map((axis) => `<label><span>${axis.toUpperCase()}</span><div class="${unit ? "input-with-unit" : ""}"><input data-vector-field="${key}" data-vector-axis="${axis}" type="number" ${Number.isFinite(options.minimum) ? `min="${options.minimum}"` : ""} step="any" data-scrub-step="${unit === "°" ? "1" : "0.05"}" value="${Number(vector[axis] || 0).toFixed(unit === "°" ? 1 : 2)}" ${options.disabled ? "disabled" : ""} />${unit ? `<span>${unit}</span>` : ""}</div></label>`).join("")}
       </div>
     </div>`;
 }
@@ -8261,14 +8261,14 @@ function renderCameraSetupInspector(setup) {
       <h2 class="section-title">静态摄影机</h2>
       ${renderVectorFields("camera-setup-position", position, ["x", "y", "z"], "位置", "", { disabled: !canEditSetup })}
       <div class="camera-pose-grid" aria-label="机位朝向">
-        ${[["pitch", "俯仰"], ["yaw", "水平"], ["roll", "翻滚"]].map(([axis, label]) => `<label><span>${label}</span><input data-camera-setup-rotation="${axis}" type="number" step="0.5" value="${Number(rotation[axis]).toFixed(1)}" ${canEditSetup ? "" : "disabled"} /></label>`).join("")}
+        ${[["pitch", "俯仰"], ["yaw", "水平"], ["roll", "翻滚"]].map(([axis, label]) => `<label><span>${label}</span><input data-camera-setup-rotation="${axis}" type="number" step="any" data-scrub-step="0.5" value="${Number(rotation[axis]).toFixed(1)}" ${canEditSetup ? "" : "disabled"} /></label>`).join("")}
       </div>
       <div class="camera-lens-wheel camera-setup-lens">
         <div class="camera-lens-heading">
           <div><span>镜头焦距</span><small>固定镜头</small></div>
           <label class="camera-lens-value">
             <span class="sr-only">焦距（毫米）</span>
-            <input id="cameraSetupFocalLength" type="number" min="${cameraFocalLengthMinimum}" max="${cameraFocalLengthMaximum}" step="0.5" value="${Number(displayPose.focalLength).toFixed(1)}" ${canEditSetup ? "" : "disabled"} />
+            <input id="cameraSetupFocalLength" type="number" min="${cameraFocalLengthMinimum}" max="${cameraFocalLengthMaximum}" step="any" data-scrub-step="0.5" value="${Number(displayPose.focalLength).toFixed(1)}" ${canEditSetup ? "" : "disabled"} />
             <span aria-hidden="true">mm</span>
           </label>
         </div>
@@ -8290,10 +8290,10 @@ function renderCameraSetupInspector(setup) {
         </div>
         ${depthOfFieldEnabled ? `<div class="camera-dof-fields">
           <label><span>对焦距离</span><div class="camera-dof-input camera-dof-focus-input">
-            <input id="cameraSetupFocusDistance" type="number" min="${cameraFocusDistanceMinimum}" max="${cameraFocusDistanceMaximum}" step="0.05" value="${Number(displayPose.focusDistance || 5).toFixed(2)}" ${canEditSetup ? "" : "disabled"} /><span aria-hidden="true">m</span>
+            <input id="cameraSetupFocusDistance" type="number" min="${cameraFocusDistanceMinimum}" max="${cameraFocusDistanceMaximum}" step="any" data-scrub-step="0.05" value="${Number(displayPose.focusDistance || 5).toFixed(2)}" ${canEditSetup ? "" : "disabled"} /><span aria-hidden="true">m</span>
           </div></label>
           <label><span>光圈</span><div class="camera-dof-input camera-dof-aperture-input">
-            <span aria-hidden="true">f/</span><input id="cameraSetupAperture" type="number" min="${cameraApertureMinimum}" max="${cameraApertureMaximum}" step="0.1" value="${Number(displayPose.aperture || 2.8).toFixed(1)}" ${canEditSetup ? "" : "disabled"} />
+            <span aria-hidden="true">f/</span><input id="cameraSetupAperture" type="number" min="${cameraApertureMinimum}" max="${cameraApertureMaximum}" step="any" data-scrub-step="0.1" value="${Number(displayPose.aperture || 2.8).toFixed(1)}" ${canEditSetup ? "" : "disabled"} />
           </div></label>
         </div>
         <div class="camera-dof-actions">
@@ -8638,7 +8638,7 @@ function renderCameraInspector() {
             <label>
               <span>对焦距离</span>
               <div class="camera-dof-input camera-dof-focus-input">
-                <input id="cameraFocusDistance" type="number" min="${cameraFocusDistanceMinimum}" max="${cameraFocusDistanceMaximum}" step="0.05" value="${focusDistance.toFixed(2)}" ${focusDistanceEditable ? "" : "disabled"} />
+                <input id="cameraFocusDistance" type="number" min="${cameraFocusDistanceMinimum}" max="${cameraFocusDistanceMaximum}" step="any" data-scrub-step="0.05" value="${focusDistance.toFixed(2)}" ${focusDistanceEditable ? "" : "disabled"} />
                 <span aria-hidden="true">m</span>
               </div>
             </label>
@@ -8646,7 +8646,7 @@ function renderCameraInspector() {
               <span>光圈</span>
               <div class="camera-dof-input camera-dof-aperture-input">
                 <span aria-hidden="true">f/</span>
-                <input id="cameraAperture" type="number" min="${cameraApertureMinimum}" max="${cameraApertureMaximum}" step="0.1" value="${aperture.toFixed(1)}" ${lensEditable ? "" : "disabled"} />
+                <input id="cameraAperture" type="number" min="${cameraApertureMinimum}" max="${cameraApertureMaximum}" step="any" data-scrub-step="0.1" value="${aperture.toFixed(1)}" ${lensEditable ? "" : "disabled"} />
               </div>
             </label>
           </div>
@@ -8660,10 +8660,10 @@ function renderCameraInspector() {
         <div class="camera-precision-settings">
           <div class="camera-precision-content">
             <div class="camera-pose-grid" aria-label="摄影机位置">
-              ${["x", "y", "z"].map((axis) => `<label><span>位置 ${axis.toUpperCase()}</span><input data-camera-position="${axis}" type="number" step="0.01" value="${Number(currentPose.position[axis]).toFixed(2)}" ${positionEditable ? "" : "disabled"} /></label>`).join("")}
+              ${["x", "y", "z"].map((axis) => `<label><span>位置 ${axis.toUpperCase()}</span><input data-camera-position="${axis}" type="number" step="any" data-scrub-step="0.01" value="${Number(currentPose.position[axis]).toFixed(2)}" ${positionEditable ? "" : "disabled"} /></label>`).join("")}
             </div>
             <div class="camera-pose-grid" aria-label="摄影机旋转">
-              ${[["pitch", "俯仰"], ["yaw", "水平"], ["roll", "翻滚"]].map(([axis, label]) => `<label><span>${label}</span><input data-camera-rotation="${axis}" type="number" step="0.5" value="${rotation ? Number(rotation[axis]).toFixed(1) : "—"}" ${(axis === "roll" ? rollEditable : pitchYawEditable) ? "" : "disabled"} /></label>`).join("")}
+              ${[["pitch", "俯仰"], ["yaw", "水平"], ["roll", "翻滚"]].map(([axis, label]) => `<label><span>${label}</span><input data-camera-rotation="${axis}" type="number" step="any" data-scrub-step="0.5" value="${rotation ? Number(rotation[axis]).toFixed(1) : "—"}" ${(axis === "roll" ? rollEditable : pitchYawEditable) ? "" : "disabled"} /></label>`).join("")}
             </div>
           </div>
         </div>
@@ -8748,7 +8748,7 @@ function renderCameraInspector() {
               </label>` : `<div class="camera-aim-world-editor">
                 <div class="camera-aim-world-heading"><span>${selectedAim.targetKind === "environment" ? "模型局部坐标" : "世界坐标"}</span><small>Scene View 中可直接拖动标记</small></div>
                 <div class="camera-aim-world-grid">
-                  ${["x", "y", "z"].map((axis) => `<label><span>${axis.toUpperCase()}</span><input data-camera-aim-world="${axis}" type="number" step="0.01" value="${Number((selectedAim.targetKind === "environment" ? selectedAim.localPosition : selectedAim.worldPosition)[axis]).toFixed(2)}" ${canEdit ? "" : "disabled"} /></label>`).join("")}
+                  ${["x", "y", "z"].map((axis) => `<label><span>${axis.toUpperCase()}</span><input data-camera-aim-world="${axis}" type="number" step="any" data-scrub-step="0.01" value="${Number((selectedAim.targetKind === "environment" ? selectedAim.localPosition : selectedAim.worldPosition)[axis]).toFixed(2)}" ${canEdit ? "" : "disabled"} /></label>`).join("")}
                 </div>
               </div>`}
               <div class="camera-aim-grid">
@@ -8796,7 +8796,7 @@ function renderCameraInspector() {
               <option value="world" ${orbitForm.targetValue === "world" ? "selected" : ""}>场景自定义点</option>
             </select>
           </label>
-          ${orbitForm.targetValue.startsWith("actor:") ? "" : `<div class="camera-orbit-world camera-orbit-target"><span>${orbitForm.targetValue.startsWith("environment:") ? "局部坐标" : "世界坐标"}</span><div>${["x", "y", "z"].map((axis) => `<label><span>${axis.toUpperCase()}</span><input data-camera-orbit-world="${axis}" type="number" step="0.01" value="${Number((orbitForm.targetValue.startsWith("environment:") ? orbitForm.localPosition : orbitForm.worldPosition)[axis]).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /></label>`).join("")}</div></div>`}
+          ${orbitForm.targetValue.startsWith("actor:") ? "" : `<div class="camera-orbit-world camera-orbit-target"><span>${orbitForm.targetValue.startsWith("environment:") ? "局部坐标" : "世界坐标"}</span><div>${["x", "y", "z"].map((axis) => `<label><span>${axis.toUpperCase()}</span><input data-camera-orbit-world="${axis}" type="number" step="any" data-scrub-step="0.01" value="${Number((orbitForm.targetValue.startsWith("environment:") ? orbitForm.localPosition : orbitForm.worldPosition)[axis]).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /></label>`).join("")}</div></div>`}
           <fieldset class="camera-orbit-choice camera-orbit-target">
             <legend>终点</legend>
             <label><input type="radio" name="cameraOrbitEndpoint" value="new" ${orbitForm.endpointMode === "new" ? "checked" : ""} ${orbitCanEdit ? "" : "disabled"} /><span>新建终点</span></label>
@@ -8808,16 +8808,16 @@ function renderCameraInspector() {
             <label><input type="radio" name="cameraOrbitDirection" value="counter-clockwise" ${orbitForm.direction === "counter-clockwise" ? "checked" : ""} ${orbitCanEdit ? "" : "disabled"} /><span>逆时针</span></label>
           </fieldset>
           ${orbitForm.endpointMode === "new" ? `
-            <label><span>旋转</span><span class="input-with-unit"><input id="cameraOrbitSweep" type="number" min="1" max="1440" step="15" value="${Number(orbitForm.sweepDegrees).toFixed(0)}" ${orbitCanEdit ? "" : "disabled"} /><span>°</span></span></label>
-            <label><span>时长</span><span class="input-with-unit"><input id="cameraOrbitDuration" type="number" min="${(1 / project.output.frameRate).toFixed(3)}" max="${Math.max(1 / project.output.frameRate, 3600 - orbitForm.startTime).toFixed(3)}" step="0.1" value="${Number(orbitForm.duration).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>s</span></span></label>
+            <label><span>旋转</span><span class="input-with-unit"><input id="cameraOrbitSweep" type="number" min="1" max="1440" step="any" data-scrub-step="15" value="${Number(orbitForm.sweepDegrees).toFixed(0)}" ${orbitCanEdit ? "" : "disabled"} /><span>°</span></span></label>
+            <label><span>时长</span><span class="input-with-unit"><input id="cameraOrbitDuration" type="number" min="${(1 / project.output.frameRate).toFixed(3)}" max="${Math.max(1 / project.output.frameRate, 3600 - orbitForm.startTime).toFixed(3)}" step="any" data-scrub-step="0.1" value="${Number(orbitForm.duration).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>s</span></span></label>
           ` : `
             <label><span>加圈</span><span class="input-with-unit"><input id="cameraOrbitExtraTurns" type="number" min="0" max="3" step="1" value="${Number(orbitForm.extraTurns).toFixed(0)}" ${orbitCanEdit ? "" : "disabled"} /><span>圈</span></span></label>
             <div class="camera-orbit-duration"><span>路径</span><strong>${orbitSummary ? `${orbitSummary.totalSweepDegrees.toFixed(0)}° · ${orbitSummary.duration.toFixed(2)} s` : "—"}</strong><small>终点位置与时间保持不变</small></div>
           `}
           <div class="camera-orbit-endpoint camera-orbit-target">
             <span>终点机位</span>
-            <label><span>距中心 <strong>${Number(orbitSummary?.startRadius ?? orbitForm.startRadius).toFixed(2)}</strong> →</span>${orbitForm.endpointMode === "new" ? `<span class="input-with-unit"><input id="cameraOrbitEndRadius" type="number" min="0.05" max="1000" step="0.05" value="${Number(orbitForm.endRadius).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>m</span></span>` : `<output>${orbitSummary ? orbitSummary.endRadius.toFixed(2) : "—"} m</output>`}</label>
-            <label title="终点比起始机位高多少；负数为下降，0 为平着绕"><span>升降</span>${orbitForm.endpointMode === "new" ? `<span class="input-with-unit"><input id="cameraOrbitEndHeight" type="number" min="-1000" max="1000" step="0.05" value="${Number(orbitForm.endRelativeHeight).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>m</span></span>` : `<output>${orbitSummary ? orbitSummary.endRelativeHeight.toFixed(2) : "—"} m</output>`}</label>
+            <label><span>距中心 <strong>${Number(orbitSummary?.startRadius ?? orbitForm.startRadius).toFixed(2)}</strong> →</span>${orbitForm.endpointMode === "new" ? `<span class="input-with-unit"><input id="cameraOrbitEndRadius" type="number" min="0.05" max="1000" step="any" data-scrub-step="0.05" value="${Number(orbitForm.endRadius).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>m</span></span>` : `<output>${orbitSummary ? orbitSummary.endRadius.toFixed(2) : "—"} m</output>`}</label>
+            <label title="终点比起始机位高多少；负数为下降，0 为平着绕"><span>升降</span>${orbitForm.endpointMode === "new" ? `<span class="input-with-unit"><input id="cameraOrbitEndHeight" type="number" min="-1000" max="1000" step="any" data-scrub-step="0.05" value="${Number(orbitForm.endRelativeHeight).toFixed(2)}" ${orbitCanEdit ? "" : "disabled"} /><span>m</span></span>` : `<output>${orbitSummary ? orbitSummary.endRelativeHeight.toFixed(2) : "—"} m</output>`}</label>
           </div>
           </div>
           ${orbitValidationMessage ? `<p class="camera-orbit-note warning">${escapeHTML(orbitValidationMessage)}</p>` : ""}
@@ -9472,7 +9472,7 @@ function formatAssetBytes(value) {
 function wireProjectNumberScrub(input, update, message, options = {}) {
   if (!input) return;
   input.closest("label")?.classList.add("scrubbable-input");
-  const step = Math.max(Math.abs(Number(input.step)) || Number(options.step) || 0.01, 0.000001);
+  const step = Math.max(Math.abs(Number(input.dataset.scrubStep ?? input.step)) || Number(options.step) || 0.01, 0.000001);
   const minimum = input.hasAttribute("min") && Number.isFinite(Number(input.min))
     ? Number(input.min)
     : -Infinity;
