@@ -348,7 +348,7 @@ export function recordCameraKeyframe(track, pose, timeInput, frameRateInput = 30
       ? existing.aim == null ? null : normalizeCameraAim(existing.aim)
       : Object.hasOwn(pose || {}, "aim")
         ? pose.aim == null ? null : normalizeCameraAim(pose.aim)
-        : normalized.keyframes.length === 0 ? normalizeCameraAim() : null,
+        : normalizeCameraAim(normalized.keyframes.findLast((candidate) => candidate.time <= time && candidate.aim != null)?.aim),
     follow: existing
       ? existing.follow == null ? null : normalizeCameraFollow(existing.follow)
       : Object.hasOwn(pose || {}, "follow")

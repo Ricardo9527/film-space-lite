@@ -763,7 +763,7 @@ const definitions = [
     id: "shot-establishing-01",
     depthOfField: { enabled: true },
   }),
-  operation("record_camera_keyframe", "cameras", "Record camera keyframe", "Create or replace a camera keyframe on the project frame grid.", {
+  operation("record_camera_keyframe", "cameras", "Record camera keyframe", "Create or replace a camera keyframe on the project frame grid. New frames explicitly capture the current direction state (free or locked); pose.aim overrides that default. Replacing a frame preserves its aim, including manual null inheritance.", {
     shotID: idReference("Owning Shot."),
     pose: cameraKeyframePose(),
     time: finiteNumber("Shot time in seconds.", { minimum: 0, maximum: 3600 }),
@@ -784,7 +784,7 @@ const definitions = [
     keyframeID: idReference("Camera keyframe to update."),
     pose: cameraPose(),
   }, ["shotID", "keyframeID", "pose"]),
-  operation("update_camera_keyframe_aim", "cameras", "Update camera Look At", "Set or clear one reached-state camera direction constraint.", {
+  operation("update_camera_keyframe_aim", "cameras", "Update camera Look At", "Set one reached-state camera direction constraint. Direction changes span the preceding explicit aim frame to this frame; null explicitly inherits and removes this direction boundary.", {
     shotID: idReference("Owning Shot."),
     keyframeID: idReference("Camera keyframe to update."),
     aim: { anyOf: [cameraAim(), { type: "null" }] },

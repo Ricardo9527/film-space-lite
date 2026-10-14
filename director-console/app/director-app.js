@@ -8474,6 +8474,12 @@ function renderCameraInspector() {
   const selectedAim = selectedKeyframe
     ? effectiveCameraAim(track, selectedKeyframe.time)
     : normalizeCameraAim();
+  const selectedAimTransition = selectedKeyframe && !selectedAimInherited
+    ? describeCameraAimTransition(track, Math.max(0, selectedKeyframe.time - 0.0001))
+    : null;
+  const selectedAimTransitionStart = selectedAimTransition?.toKeyframeID === selectedKeyframe?.id
+    ? track.keyframes.find((candidate) => candidate.id === selectedAimTransition.fromKeyframeID)
+    : null;
   const liveAimState = effectiveCameraAimState(track, playback.elapsed);
   const liveAim = liveAimState.aim;
   const liveAimTransition = describeCameraAimTransition(track, playback.elapsed);
@@ -8725,7 +8731,7 @@ function renderCameraInspector() {
           </div>`}
           ${selectedKeyframe ? `<div class="camera-constraint-row ${selectedAim.mode === "look-at" ? "active lock" : ""}">
             <div class="camera-constraint-heading">
-              <div><strong>方向锁定</strong><span>${selectedAimInherited ? "沿用上一关键帧" : "从当前关键帧生效"}</span></div>
+              <div><strong>方向锁定</strong><span>${selectedAimInherited ? "沿用上一关键帧" : selectedAimTransitionStart ? `${selectedAimTransitionStart.time.toFixed(2)} 秒 → ${selectedKeyframe.time.toFixed(2)} 秒转向` : "当前关键帧方向状态"}</span></div>
               <button id="cameraAimToggle" class="switch-button" type="button" role="switch" aria-checked="${selectedAim.mode === "look-at"}" aria-label="方向锁定" ${canEdit ? "" : "disabled"}><span aria-hidden="true"></span></button>
             </div>
             ${selectedAim.mode === "look-at" ? `<label class="camera-constraint-target"><span>锁定目标</span>

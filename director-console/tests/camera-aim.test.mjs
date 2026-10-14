@@ -15,6 +15,8 @@ import {
 import {
   createCameraTrack,
   normalizeCameraAim,
+  recordCameraKeyframe,
+  updateCameraKeyframeAim,
   sampleCameraTrack,
 } from "../app/camera-track.js";
 import { cameraSensorGate } from "../app/camera-composition.js";
@@ -1409,4 +1411,22 @@ test("the optical roll helper agrees with the three-angle reading", () => {
   assert.ok(
     angleGap(cameraOpticalRollDegrees(quaternion), cameraRotationDegrees(quaternion).roll) < 1e-9
   );
+});
+
+
+test("recorded free key bounds the next lock transition until explicitly inherited", () => {
+  let track = recordCameraKeyframe(createCameraTrack(), basePose, 0);
+  const middlePose = { ...basePose, quaternion: cameraQuaternionFromRotationDegrees({ yaw: 35, pitch: 0, roll: 0 }) };
+  track = recordCameraKeyframe(track, middlePose, 3);
+  track = recordCameraKeyframe(track, basePose, 5);
+  track = updateCameraKeyframeAim(track, track.keyframes[2].id, {
+    mode: "look-at", targetKind: "world", worldPosition: { x: 3, y: 2, z: 0 },
+  });
+  assert.equal(describeCameraAimTransition(track, 2), null);
+  assert.equal(describeCameraAimTransition(track, 4).fromKeyframeID, track.keyframes[1].id);
+  const { project, shot } = makeProject(track);
+  assert.deepEqual(sampleShotCamera(project, shot, 2).quaternion, sampleCameraTrack(track, 2).quaternion);
+  track = updateCameraKeyframeAim(track, track.keyframes[1].id, null);
+  assert.equal(describeCameraAimTransition(track, 2).fromKeyframeID, track.keyframes[0].id);
+  assert.equal(describeCameraAimTransition(track, 4).toKeyframeID, track.keyframes[2].id);
 });

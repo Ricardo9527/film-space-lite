@@ -260,7 +260,7 @@ test("camera aim defaults safely and survives pose edits", () => {
     trackingResponse: 0,
   });
   track = recordCameraKeyframe(track, poseB, 1, 30);
-  assert.equal(track.keyframes[1].aim, null);
+  assert.equal(track.keyframes[1].aim.mode, "free");
   track = updateCameraKeyframeAim(track, track.keyframes[0].id, {
     mode: "look-at",
     targetActorID: "actor-1",
@@ -320,4 +320,24 @@ test("camera Follow defaults safely, inherits, and moves its activation referenc
   track = moveCameraKeyframe(track, track.keyframes[1].id, 2, 30);
   assert.equal(track.keyframes[1].time, 2);
   assert.equal(track.keyframes[1].follow.referenceTime, 2);
+});
+
+
+test("recording pins the current direction while rerecording preserves manual inheritance", () => {
+  let track = recordCameraKeyframe(createCameraTrack(), poseA, 0);
+  track = updateCameraKeyframeAim(track, track.keyframes[0].id, {
+    mode: "look-at", targetKind: "world", worldPosition: { x: 2, y: 3, z: 4 },
+    composition: "left-third", trackingResponse: 0.5,
+  });
+  track = recordCameraKeyframe(track, poseB, 3);
+  assert.deepEqual(track.keyframes[1].aim, track.keyframes[0].aim);
+  track = updateCameraKeyframeAim(track, track.keyframes[1].id, null);
+  track = recordCameraKeyframe(track, poseMiddle, 3);
+  assert.equal(track.keyframes[1].aim, null);
+  track = recordCameraKeyframe(track, poseB, 5);
+  assert.deepEqual(track.keyframes[2].aim, track.keyframes[0].aim);
+  track = recordCameraKeyframe(track, { ...poseB, aim: { mode: "free" } }, 4);
+  assert.equal(track.keyframes[2].aim.mode, "free");
+  track = recordCameraKeyframe(track, { ...poseB, aim: null }, 6);
+  assert.equal(track.keyframes.at(-1).aim, null);
 });
