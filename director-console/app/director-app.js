@@ -333,7 +333,6 @@ let viewportMode = viewportModes.edit;
 let editViewMode = "scene";
 let renderCameraSpeedControl;
 let shotFrameMaskStrong = false;
-let sceneViewFramePreview = false;
 // 构图辅助线是本次编辑会话的观察偏好，不属于机位、Shot 或项目数据。
 let cameraSetupCompositionGuide = defaultCameraCompositionGuideState();
 const cameraSetupCompositionGuideOptions = Object.freeze([
@@ -5371,7 +5370,7 @@ function updateShotComposition() {
   const setupEdit = viewedSetup ? cameraEditSession.setupEdit(viewedSetup.id) : null;
   const sceneFrameVisible = viewportMode === viewportModes.edit
     && editViewMode === "scene"
-    && (sceneViewFramePreview || Boolean(viewedSetup));
+    && Boolean(viewedSetup);
   const visible = shotFrameVisible || sceneFrameVisible;
   elements.shotFrameOverlay.classList.toggle("camera-setup-frame", Boolean(viewedSetup));
   const aspectRatio = cameraCompositionAspect({
@@ -5391,8 +5390,7 @@ function updateShotComposition() {
     aspectRatio,
     frameHeightFraction: shotFrameVisible ? frame.heightFraction : 0.84,
   });
-  // 机位视角有自己的相机和自己的投影；自由相机的取景框预览只在没进机位时生效，
-  // 两者不再共用 refreshSceneCameraProjection 里那个分支。
+  // 机位视角使用独立的摄影机投影，自由视角保持观察投影。
   if (viewedSetup) {
     directorRenderer.setSetupFrameComposition({
       aspectRatio,
@@ -5400,7 +5398,7 @@ function updateShotComposition() {
     });
   }
   directorRenderer.setSceneFramePreview({
-    enabled: sceneFrameVisible && !viewedSetup,
+    enabled: false,
     aspectRatio,
     frameHeightFraction: frame.heightFraction,
   });
@@ -5422,11 +5420,8 @@ function updateShotComposition() {
     frame,
   });
   if (sceneFrameVisible) {
-    const pose = viewedSetup
-      ? directorRenderer.captureSetupViewPose()
-      : directorRenderer.captureSceneCameraPose();
-    const source = viewedSetup ? viewedSetup.name : "自由镜头";
-    elements.shotFrameLabel.textContent = `${source} · ${aspectRatio} · ${pose.focalLength.toFixed(1)} mm`;
+    const pose = directorRenderer.captureSetupViewPose();
+    elements.shotFrameLabel.textContent = `${viewedSetup.name} · ${aspectRatio} · ${pose.focalLength.toFixed(1)} mm`;
   } else {
     const sample = activeShotCameraEdit()?.pose || sampleCameraTrack(track, playback.elapsed);
     elements.shotFrameLabel.textContent = `${shot.name} · ${aspectRatio} · ${Math.round(sample.focalLength)} mm`;
@@ -5435,17 +5430,13 @@ function updateShotComposition() {
 
 function toggleShotFrameMask() {
   if (viewportMode !== viewportModes.edit) return;
-  if (editViewMode === "scene") {
-    sceneViewFramePreview = !sceneViewFramePreview;
-    updateShotComposition();
-    return;
-  }
+  if (editViewMode !== "shot" && !cameraSetupViewActive()) return;
   shotFrameMaskStrong = !shotFrameMaskStrong;
   renderShotFrameMask();
 }
 
 function renderShotFrameMask() {
-  const strong = editViewMode === "scene" ? sceneViewFramePreview : shotFrameMaskStrong;
+  const strong = shotFrameMaskStrong;
   elements.shotFrameOverlay.classList.toggle("strong-mask", strong);
 }
 
