@@ -7012,7 +7012,7 @@ function renderActorInspector(actor) {
     <details id="actorPerformance" class="inspector-section inspector-disclosure" ${actorPerformanceExpanded ? "open" : ""}>
       <summary>动作内偏移与姿态</summary>
       <div class="inspector-disclosure-content">
-      <p class="section-caption">人物帧控制 · 位置相对走位方向；朝向偏移归零即自动面向</p>
+      <p class="section-caption">人物帧控制 · 位置相对走位方向；朝向偏移归零即使用动作面向</p>
       <div class="transform-field-grid two-column">
         ${['offsetX','offsetY','offsetZ'].map((key,index)=>`<label><span>${['X 左右','Y 上下','Z 前后'][index]}</span><div class="input-with-unit"><input data-actor-pose="${key}" aria-label="${actorPoseParameters[key].label}（米）" type="number" required min="-1000" max="1000" step="any" value="${pose[key].toFixed(3)}" /><span>m</span></div></label>`).join('')}
       </div>
@@ -7252,20 +7252,15 @@ function renderMotionInspector(actor, target = elements.inspectorContent) {
       );
     });
   }
-  for (const button of elements.inspectorContent.querySelectorAll("[data-facing-step]")) {
+  for (const button of elements.inspectorContent.querySelectorAll("[data-facing-mode]")) {
     button.addEventListener("click", () => {
-      const action = actor.motionActions.find((candidate) => candidate.id === button.dataset.actionId);
-      if (!action) return;
-      const step = Number(button.dataset.facingStep);
       const actionID = button.dataset.actionId;
-      const inheritedFacing = sampleActionInspection(actor, actionID, 0).sample.rotationY;
-      const baseFacing = Number.isFinite(action.facingY) ? action.facingY : inheritedFacing;
-      const nextFacing = step === 0 ? null : Number(baseFacing || 0) + step;
-      commitProject(
-        (current) => updateMotionAction(current, actor.id, actionID, { facingY: nextFacing }),
-        "表演朝向已更新",
-        { preserveInspectionFor: { actorID: actor.id, actionID } }
-      );
+      const action = actor.motionActions.find(candidate => candidate.id === actionID);
+      const patch = action.kind === "move"
+        ? { facingMode: button.dataset.facingMode }
+        : { facingY: null };
+      commitProject(current => updateMotionAction(current, actor.id, actionID, patch),
+        "动作面向已更新", { preserveInspectionFor: { actorID: actor.id, actionID } });
     });
   }
   for (const input of elements.inspectorContent.querySelectorAll("[data-move-duration]")) {
@@ -7292,13 +7287,14 @@ function renderMotionInspector(actor, target = elements.inspectorContent) {
   }
   for (const input of elements.inspectorContent.querySelectorAll("[data-facing-angle]")) {
     const actionID = input.dataset.facingAngle;
-    wireInputNumberScrub(input, { precision: 0 });
+    wireInputNumberScrub(input, { precision: 1 });
     input.addEventListener("change", (event) => {
       commitProject(
         (current) => updateMotionAction(current, actor.id, actionID, {
           facingY: Number(event.target.value) * Math.PI / 180,
+          ...(actor.motionActions.find(action => action.id === actionID).kind === "move" ? {facingMode: "fixed"} : {}),
         }),
-        "表演朝向已更新",
+        "动作面向已更新",
         { preserveInspectionFor: { actorID: actor.id, actionID } }
       );
     });
@@ -7360,6 +7356,31 @@ function renderMotionRows(actor) {
       count: performanceIDs.length,
     }));
   }
+  const renderFacingEditor = (action, index) => {
+    const moving = action.kind === "move";
+    const mode = moving ? action.facingMode ?? "path" : Number.isFinite(action.facingY) ? "fixed" : "inherit";
+    const phase = playbackPlan.phases.find(candidate => candidate.action.id === action.id);
+    // Display the action's base yaw, without the additive pose-keyframe offset.
+    const baseYaw = phase?.endRotationY ?? playbackPlan.phases.findLast(candidate => candidate.actionIndex < index)?.endRotationY ?? actor.rotationY;
+    const degrees = ((mode === "fixed" ? action.facingY : baseYaw) * 180 / Math.PI).toFixed(1);
+    const hasNextMove = actor.motionActions.slice(index + 1).some(candidate => candidate.kind === "move");
+    const id = escapeHTML(action.id);
+    return `<div class="facing-editor">
+      <label class="facing-angle-row">面向角度
+        <span class="input-with-unit motion-number facing-angle-field ${mode !== "fixed" ? "inherited" : ""}">
+          <input data-facing-angle="${id}" type="number" step="any" data-scrub-step="1" value="${degrees}" aria-label="${moving ? "移动" : "停留"}面向角度（度）" title="输入或拖动，直接指定面向角度" />
+          <span>°</span>
+        </span>
+        <span class="facing-mode-label">${mode === "fixed" ? "指定" : mode === "inherit" ? "保持" : "跟随"}</span>
+      </label>
+      <div class="facing-command-row">
+        <button class="compact-button facing-mode-button ${mode === "inherit" ? "active" : ""}" type="button" data-action-id="${id}" data-facing-mode="inherit" aria-pressed="${mode === "inherit"}" title="保持进入这段${moving ? "移动" : "停留"}时的面向">保持面向</button>
+        ${moving
+          ? `<button class="compact-button facing-mode-button ${mode === "path" ? "active" : ""}" type="button" data-action-id="${id}" data-facing-mode="path" aria-pressed="${mode === "path"}" title="持续跟随这段移动的方向，路径变化时同步更新">跟随移动方向</button>`
+          : `<button class="compact-button" type="button" data-face-next-action="${id}" ${hasNextMove ? "" : "disabled"} title="${hasNextMove ? "按下一段移动的方向设置角度；修改路径后可再次点击对准" : "后面没有移动段"}">朝向移动方向</button>`}
+      </div>
+    </div>`;
+  };
   const renderMoveRow = (action, index) => {
     const timing = playbackPlan.actionTimings[index];
     // 移动片段的推荐速度是从原始动画的根位移算出来的（tools/import_move_action.py），
@@ -7394,6 +7415,7 @@ function renderMotionRows(actor) {
           </span>
           ${""}
         </div>
+        ${renderFacingEditor(action, index)}
       </article>`;
   };
 
@@ -7401,14 +7423,6 @@ function renderMotionRows(actor) {
   // 免得「起点 1」里面的动作接着数成 2、3。
   const renderPerformanceRow = (action, index, letter) => {
     const previewing = actionInspection?.actorID === actor.id && actionInspection?.actionID === action.id;
-    const hasNextMove = actor.motionActions.slice(index + 1).some((candidate) => candidate.kind === "move");
-    // 继承时也要看得见实际朝向。角度必须由模型解析 —— Move 会把人转向目标，
-    // 在这儿自己往回找上一个 facingY 会算错。只有继承的行才采样。
-    const facingInherited = !Number.isFinite(action.facingY);
-    const facingRadians = facingInherited
-      ? Number(sampleActionInspection(actor, action.id, 0).sample.rotationY || 0)
-      : action.facingY;
-    const facingDegrees = Math.round(facingRadians * 180 / Math.PI);
     const behaviorLabels = { loop: "循环", play_once: "单次", hold_last_frame: "末帧" };
     const catalogAction = desktopActions[action.actionID];
     const loopBehaviorOptions = desktopActionLoopBehaviorOptions(catalogAction);
@@ -7452,16 +7466,7 @@ function renderMotionRows(actor) {
           </span>
           ${""}
         </div>
-        <div class="facing-editor">
-          <div class="facing-command-row ${hasNextMove ? "has-next" : ""}">
-            <div class="input-with-unit motion-number facing-angle-field ${facingInherited ? "inherited" : ""}">
-              <input data-facing-angle="${escapeHTML(action.id)}" type="number" step="any" data-scrub-step="1" value="${facingDegrees}" aria-label="${"停留"}朝向（度）" />
-              <span>°</span>
-            </div>
-            <button class="compact-button facing-inherit-button ${facingInherited ? "active" : ""}" type="button" data-action-id="${escapeHTML(action.id)}" data-facing-step="0" aria-pressed="${facingInherited}" title="恢复继承朝向">继承</button>
-            ${hasNextMove ? `<button class="compact-button facing-next-button" type="button" data-face-next-action="${escapeHTML(action.id)}" title="对准下一移动目标">→ 下一点</button>` : ""}
-          </div>
-        </div>
+        ${renderFacingEditor(action, index)}
         ${""}
       </article>`;
   };

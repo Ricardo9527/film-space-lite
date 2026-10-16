@@ -3975,18 +3975,30 @@ body.adjusting-path-height * {
 
 .facing-editor {
   display: grid;
-  margin: 9px 0 0 27px;
+  gap: 5px;
+  margin: 9px 0 0;
+}
+
+.facing-angle-row {
+  display: grid;
+  grid-template-columns: auto minmax(58px, 1fr) 28px;
+  gap: 6px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.facing-mode-label {
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .facing-command-row {
   display: grid;
-  grid-template-columns: minmax(58px, 1fr) 76px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
 }
 
-.facing-command-row.has-next {
-  grid-template-columns: minmax(58px, 1fr) 76px 76px;
-}
 
 .facing-angle-field input {
   width: 100%;
@@ -4004,15 +4016,14 @@ body.adjusting-path-height * {
   color: var(--text-muted);
 }
 
-.facing-command-row .compact-button,
-.facing-next-button {
+.facing-command-row .compact-button {
   width: 100%;
   min-height: 30px;
   padding-inline: 4px;
   white-space: nowrap;
 }
 
-.facing-inherit-button.active {
+.facing-mode-button.active {
   border-color: var(--line-strong);
   background: var(--selected-bg);
   color: var(--accent-strong);

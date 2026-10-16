@@ -36,3 +36,5 @@ UI 与 MCP 操作同一份 Lite 项目。旧 revision 必须重新读取后提�
 初始绝对面向通过 set_actor_transform.rotationY 设置；record_actor_pose_keyframe 的 rotationYOffset 为相对自动面向偏移，单位弧度。例：time=0 pose={rotationYOffset:0}，time=1 pose={rotationYOffset:0.5235987756}，time=2 pose={rotationYOffset:0}；最后一帧归零后 Move 继续自动转向。新的 pose.rotationY 写入明确拒绝；旧文件由版本迁移转换。
 
 简单动作：使用 add_stay 的 gesture/joints/transitionSeconds 编排头、腰、同步髋膝；以明确姿态和节奏为准，不模拟精细人体运动。gesture=hold 保持上一姿态，kneel/crouch/sit/stand 仅重设腿部。先检查 actor.poseTrack 的 torsoPitch/headPitch 显式覆盖。完整字段通过 get_film_space_operation_schema 查询，更新通过 update_motion_action。
+
+移动面向：add_move.options / update_motion_action.patch 的 facingMode 可选 path/inherit/fixed。inherit 保持进入时基准面向；fixed 必须给 facingY 世界弧度角。例后退击飞 add_move options={speed:2,facingMode:"inherit"}。rotationYOffset 继续叠加；Move 的位置偏移沿路径，Hold 沿停留朝向。

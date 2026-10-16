@@ -299,6 +299,7 @@ const motionPatch = () => object({
   loopBehavior: { type: "string", enum: ["loop"] },
   
   
+  facingMode: {type:"string", enum:["path","inherit","fixed"], description:"Move only: follow path (default), keep entering base facing, or use facingY as a world angle. Pose yaw offsets remain additive."},
   facingY: {
     anyOf: [
       finiteNumber("World-Y facing angle in radians.", { minimum: -Math.PI * 2, maximum: Math.PI * 2 }),
@@ -570,6 +571,8 @@ const definitions = [
         "Move-action catalog ID from the current discovery actionCatalog."
       ),
       speed: finiteNumber("Move speed in meters per second.", { minimum: 0.05, maximum: 20 }),
+      facingMode: {type:"string", enum:["path","inherit","fixed"], description:"Follow path (default), keep entering base facing, or use fixed facingY."},
+      facingY: finiteNumber("World-Y angle in radians; required for fixed facing.", { minimum: -Math.PI * 2, maximum: Math.PI * 2 }),
       locomotionGait: { type: "string", enum: ["walk"] },
       
     }),

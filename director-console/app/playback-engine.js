@@ -88,7 +88,8 @@ function withActorPose(actor,time,sample) {
   const blockingPose=sampleActorPose(actor.poseTrack || {interpolation:"smooth",keyframes:[]},time,base,legacyActorPose(actor));
   blockingPose.rotationY=normalizeAngle(sample.rotationY+blockingPose.rotationYOffset);
   // Offsets use the path/Hold heading before authored pose yaw and stay in meters.
-  const cosine=Math.cos(sample.rotationY),sine=Math.sin(sample.rotationY);
+  const offsetHeading=sample.pathRotationY ?? sample.rotationY;
+  const cosine=Math.cos(offsetHeading),sine=Math.sin(offsetHeading);
   const position={
     x:sample.position.x+blockingPose.offsetX*cosine+blockingPose.offsetZ*sine,
     y:sample.position.y+blockingPose.offsetY,

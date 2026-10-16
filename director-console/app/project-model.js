@@ -1,6 +1,6 @@
 import { createActorPoseTrack, recordActorPose, moveActorPoseFrames, migrateLegacyActorPoseTrack } from "./actor-pose.js";
 import { output1080Resolution } from "./camera-composition.js";
-import { blockingCharacterID, isBlockingActor, blockingMotionActions, blockingPostureFields, compileBlockingPlayback, sampleBlockingPhase } from "./blocking-actor.js";
+import { blockingCharacterID, isBlockingActor, blockingMotionActions, blockingPostureFields, moveFacingFields, compileBlockingPlayback, sampleBlockingPhase } from "./blocking-actor.js";
 import {
   defaultMoveSpeed,
   minimumMoveSpeed,
@@ -23,7 +23,7 @@ import {
 
 export { desktopActions } from "./action-catalog.js";
 
-export const desktopProjectSchemaVersion = 70;
+export const desktopProjectSchemaVersion = 71;
 
 // Keep the index and color values aligned with HumanFigureFactory on Phone Lite.
 export const clothingColors = [
@@ -438,7 +438,8 @@ export function addMoveAction(project, actorID, target, options = {}) {
           position,
           speed,
           duration: 0,
-          facingY: null,
+          facingY: Number.isFinite(options.facingY) ? normalizeAngle(options.facingY) : null,
+          ...moveFacingFields({...options,kind:"move"}),
           locomotionGait: options.locomotionGait === "run" || requestedAction.locomotionGait === "run" ? "run" : "walk",
           loopBehavior: requestedAction.loopBehavior,
           ...(incomingMovePhaseSync ? { incomingMovePhaseSync } : {}),
@@ -584,6 +585,7 @@ export function updateMotionAction(project, actorID, actionID, patch = {}) {
     const next = { ...action };
     if (Object.hasOwn(patch,"speed")) next.speed = clampFinite(patch.speed,minimumMoveSpeed,20,action.speed);
     if (Object.hasOwn(patch,"duration") && action.kind === "hold" && index > 0) next.duration = clampFinite(patch.duration,0,3600,action.duration);
+    if (Object.hasOwn(patch,"facingMode")) next.facingMode = patch.facingMode;
     if (Object.hasOwn(patch,"facingY")) next.facingY = Number.isFinite(patch.facingY) ? normalizeAngle(patch.facingY) : null;
     if (Object.hasOwn(patch,"position")) next.position = sanitizeVector(patch.position,action.position);
     if (["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(patch,key))) {
@@ -1968,7 +1970,7 @@ function normalizeAction(input, fallbackPosition, usedActionIDs) {
     speed: clampFinite(input.speed, minimumMoveSpeed, 20, defaultMoveSpeed),
     duration: kind === "hold" ? clampFinite(input.duration, 0, 3600, 0) : 0,
     facingY: Number.isFinite(input.facingY) ? normalizeAngle(input.facingY) : null,
-    locomotionGait: "walk", loopBehavior: "loop", ...blockingPostureFields({ ...input, kind }) };
+    locomotionGait: "walk", loopBehavior: "loop", ...blockingPostureFields({ ...input, kind }), ...moveFacingFields({...input,kind}) };
 }
 
 function ensureAnchor(actions, position) {

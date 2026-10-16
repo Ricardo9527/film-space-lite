@@ -24,6 +24,17 @@ export function blockingPostureFields(action) {
     ...(Object.keys(joints).length?{joints}:{}), ...(transitionSeconds!==null?{transitionSeconds}:{}) };
 }
 
+export function moveFacingFields(action) {
+  if (action.kind !== "move") {
+    if (action.facingMode != null) throw new Error("移动面向模式只适用于 Move。");
+    return {};
+  }
+  const facingMode = action.facingMode ?? "path";
+  if (!["path", "inherit", "fixed"].includes(facingMode)) throw new Error("无效的移动面向模式。");
+  if (facingMode === "fixed" && !Number.isFinite(action.facingY)) throw new Error("指定移动面向需要有效角度。");
+  return {facingMode};
+}
+
 export function blockingHeadHeight(pose) {
   return blockingPoseLandmarks(pose?.blockingPose || legacyActorPose({}, pose)).head.y;
 }
@@ -61,7 +72,7 @@ export function blockingMotionActions(actions) {
       position: { ...action.position }, speed: action.speed,
       duration: action.duration, facingY: action.facingY,
       locomotionGait: "walk", loopBehavior: "loop",
-      ...blockingPostureFields(action),
+      ...blockingPostureFields(action), ...moveFacingFields(action),
     };
   });
 }
@@ -72,6 +83,7 @@ export function compileBlockingPlayback(actor) {
   let time = 0;
   let position = { ...actor.position };
   let rotationY = actor.rotationY;
+  let pathRotationY = actor.rotationY;
   let previousPose = legacyActorPose(actor);
   actor.motionActions.forEach((action, actionIndex) => {
     const moving = action.kind === "move";
@@ -79,9 +91,12 @@ export function compileBlockingPlayback(actor) {
     const duration = moving ? distance / action.speed : action.duration;
     const dx = action.position.x - position.x;
     const dz = action.position.z - position.z;
+    const pathHeading = Math.hypot(dx, dz) > 1e-6 ? Math.atan2(dx, dz) : pathRotationY;
     const targetRotationY = moving
-      ? Math.hypot(dx, dz) > 1e-6 ? Math.atan2(dx, dz) : rotationY
+      ? action.facingMode === "inherit" ? rotationY
+        : action.facingMode === "fixed" ? action.facingY : pathHeading
       : action.facingY ?? rotationY;
+    const targetPathRotationY = moving ? pathHeading : targetRotationY;
     const endPosition = moving ? { ...action.position } : { ...position };
     actionTimings.push({ actionStartTime: time, totalDuration: duration, turnDuration: 0,
       holdDuration: moving ? 0 : duration, moveDuration: moving ? duration : 0,
@@ -96,8 +111,10 @@ export function compileBlockingPlayback(actor) {
       phases.push({ kind: action.kind, blocking: true, action, actionIndex,
         phaseKey: `${action.id}:${action.kind}`, startTime: time, endTime: time + duration,
         duration, startPosition: position, endPosition, startRotationY: rotationY,
-        endRotationY: targetRotationY,startPose,endPose });
+        endRotationY: targetRotationY, startPathRotationY: pathRotationY,
+        endPathRotationY: targetPathRotationY, startPose,endPose });
       rotationY = targetRotationY;
+      pathRotationY = targetPathRotationY;
     }
     position = endPosition;
     time += duration;
@@ -120,6 +137,8 @@ export function sampleBlockingPhase(phase, elapsed) {
       phase.startPosition[axis] + (phase.endPosition[axis] - phase.startPosition[axis]) * progress])),
     rotationY: normalizeAngle(phase.startRotationY
       + normalizeAngle(phase.endRotationY - phase.startRotationY) * smoothTurn),
+    pathRotationY: normalizeAngle(phase.startPathRotationY
+      + normalizeAngle(phase.endPathRotationY - phase.startPathRotationY) * smoothTurn),
     actionID: phase.action.actionID, actionKind: phase.kind,
     posture: phase.kind === "hold" ? phase.action.posture ?? "stand" : "stand",
     seatHeight: phase.action.seatHeight ?? blockingSeatHeight,

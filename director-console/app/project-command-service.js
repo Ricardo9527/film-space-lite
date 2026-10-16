@@ -520,8 +520,8 @@ function validateOperationSemantics(project, operation) {
   }
   const patch = operation.patch || {};
   const incompatibleFields = motionAction.kind === "move"
-    ? ["duration", "loopBehavior", "facingY", "sourceInSeconds", "sourceOutSeconds"]
-    : ["speed", "locomotionGait"];
+    ? ["duration", "loopBehavior", "sourceInSeconds", "sourceOutSeconds"]
+    : ["speed", "locomotionGait", "facingMode"];
   const incompatibleField = incompatibleFields.find((field) => Object.hasOwn(patch, field));
   if (incompatibleField) {
     throw semanticError(
