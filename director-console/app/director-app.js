@@ -1,6 +1,6 @@
 import {startUpdateUI} from "./update-notice.js";
 import { actorFramePose, actorPoseParameters, actorPoseKeyframeAtTime, recordActorPose, moveActorPoseFrames } from "./actor-pose.js";
-import { recordActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
+import { addMovableObject, recordActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
 import { sampleActor } from "./playback-engine.js";
 import { CameraKeyframeSelection } from "./camera-keyframe-selection.js";
 import { wireCameraKeyframeMarker, wireTimelineKeyframeMarker } from "./camera-keyframe-interaction.js";
@@ -97,7 +97,7 @@ import {
   focalLengthFromSliderProgress,
   focalLengthToSliderProgress,
 } from "./camera-viewport-navigation.js";
-import { renderShotMP4 } from "./shot-output-session.js";
+import { renderShotFrame, renderShotMP4 } from "./shot-output-session.js";
 import { ProjectStateStore } from "./project-state-store.js";
 import { outputFrameCount, validH264Resolution } from "./output-export.js";
 
@@ -189,6 +189,7 @@ const elements = {
   cameraExportProgress: document.getElementById("cameraExportProgress"),
   cancelCameraExport: document.getElementById("cancelCameraExport"),
   
+  exportCameraFrame: document.getElementById("exportCameraFrame"),
   recordCameraOutput: document.getElementById("recordCameraOutput"),
   cameraRecordActions: document.getElementById("cameraRecordActions"),
   transportCluster: document.getElementById("transportCluster"),
@@ -1364,6 +1365,7 @@ function syncOperatorSelection() {
 
 function setupEvents() {
   wirePathHeightControl();
+  wireMovableObjectCreation();
   elements.addActor.addEventListener("click", () => {
     if (sceneSidebarMode === "shots") addNewShot();
     else if (sceneSidebarMode === "setups") addNewCameraSetup();
@@ -1510,6 +1512,7 @@ function setupEvents() {
   elements.chooseOutputFolder.addEventListener("click", () => chooseProjectOutputFolder(true));
   elements.revealCameraOutput.addEventListener("click", revealCurrentOutput);
   {}
+  elements.exportCameraFrame.addEventListener("click", exportCurrentShotFrame);
   elements.recordCameraOutput.addEventListener("click", exportSelectedShotMP4);
   elements.cancelCameraExport.addEventListener("click", requestCameraExportCancel);
   elements.sceneView.addEventListener("click", () => {
@@ -1598,6 +1601,7 @@ function setupEvents() {
     if (
       document.getElementById("shortcutsDialog").open
       || document.getElementById("newProjectDialog").open
+      || document.getElementById("frameNameDialog").open
       || document.getElementById("projectSettingsDialog").open
       || elements.semanticConflictDialog.open
       || document.getElementById("shotDraftConflictDialog")?.open
@@ -3433,6 +3437,77 @@ function requestCameraExportCancel() {
   renderCameraWorkspace();
 }
 
+function requestFrameName(shot, time, frameRate) {
+  const dialog = document.getElementById("frameNameDialog");
+  const form = document.getElementById("frameNameForm");
+  const input = document.getElementById("frameNameInput");
+  const cancel = document.getElementById("frameNameCancel");
+  const frame = String(Math.round(time * frameRate)).padStart(6, "0");
+  input.value = `${shot.name.slice(0, 40).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}_frame${frame}`;
+  input.setCustomValidity("");
+  dialog.returnValue = "";
+  const validate = (event) => {
+    if (event.submitter?.value !== "export") return;
+    const name = input.value.trim().replace(/\.png$/i, "").trim();
+    if (!name || /^\.+$/.test(name) || /[<>:"/\\|?*\x00-\x1f]/.test(name)) {
+      event.preventDefault();
+      input.setCustomValidity("请输入有效名称，不能使用 / \\ : * ? \" < > |。");
+      input.reportValidity();
+    }
+  };
+  const clearError = () => input.setCustomValidity("");
+  const cancelDialog = () => dialog.close("cancel");
+  form.addEventListener("submit", validate);
+  input.addEventListener("input", clearError);
+  cancel.addEventListener("click", cancelDialog);
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => {
+      form.removeEventListener("submit", validate);
+      input.removeEventListener("input", clearError);
+      cancel.removeEventListener("click", cancelDialog);
+      resolve(dialog.returnValue === "export" ? input.value.trim() : null);
+    }, { once: true });
+    dialog.showModal();
+    input.select();
+  });
+}
+
+async function exportCurrentShotFrame() {
+  persistActorPoseDraft();
+  if (viewportMode !== viewportModes.camera || isExporting()) return;
+  const shot = findShot(project);
+  if (!shot || !cameraTrackReady(shot.camera.track)) {
+    showToast("当前 Shot 没有可输出的摄影机轨道", true);
+    return;
+  }
+  if (playback.status === "playing") playback.pause();
+  const time = playback.elapsed;
+  const fileName = await requestFrameName(shot, time, project.output.frameRate);
+  if (!fileName) return;
+  let outputFolder = project.output.folder;
+  if (!outputFolder) outputFolder = await chooseProjectOutputFolder(false);
+  if (!outputFolder) return;
+  const snapshot = structuredClone(project);
+  exportState = { ...exportState, status: "preparing", taskID: null, completedFrames: 0,
+    frameCount: 1, cancelRequested: false, error: null };
+  renderCameraWorkspace();
+  try {
+    const result = await renderShotFrame({ renderer: directorRenderer, api: projectAPI, snapshot,
+      resolution: selectedShotOutputResolution(), time, fileName, cancelled: () => exportState.cancelRequested,
+      onSaving: () => { exportState.status = "saving-frame"; renderCameraWorkspace(); } });
+    exportState = { ...exportState, status: "success", lastResult: result, error: null };
+    showToast(`当前帧已导出：${result.fileName}`);
+  } catch (error) {
+    const cancelled = error?.name === "AbortError";
+    exportState = { ...exportState, status: cancelled ? "cancelled" : "error", error: cancelled ? null : error.message };
+    showToast(cancelled ? "已取消当前帧输出" : `当前帧输出失败：${error.message}`, !cancelled);
+  } finally {
+    exportState.cancelRequested = false;
+    syncRenderer();
+    renderCameraWorkspace();
+  }
+}
+
 async function exportSelectedShotMP4() {
   if (viewportMode !== viewportModes.camera || isExporting()) return;
   const shot = findShot(project);
@@ -3508,7 +3583,7 @@ async function exportSelectedShotMP4() {
 }
 
 function isExporting() {
-  return ["preparing", "rendering", "encoding", "baking-blend", "building-blend", "cancelling"].includes(exportState.status);
+  return ["preparing", "saving-frame", "rendering", "encoding", "baking-blend", "building-blend", "cancelling"].includes(exportState.status);
 }
 
 function handlePlaybackChange(state) {
@@ -3745,7 +3820,7 @@ function aimStateDisplayLabel(aim) {
   if (aim.targetKind === "world") return "场景自定义点";
   if (aim.targetKind === "environment") return project.scene.environment.visuals.find((visual) => visual.id === aim.environmentID)?.name || "目标已删除";
   const index = project.scene.actors.findIndex((actor) => actor.id === aim.targetActorID);
-  const actorLabel = index >= 0 ? `演员 ${String(index + 1).padStart(2, "0")}` : "目标已删除";
+  const actorLabel = index >= 0 ? actorTimelineName(index) : "目标已删除";
   return `${actorLabel}·${cameraAimHeightLabel(aim.actorHeight)}`;
 }
 
@@ -4145,6 +4220,8 @@ function renderProjectSwitcher() {
 
 function renderActors() {
   const actors = project.scene.actors;
+  document.getElementById("addMovableObject").hidden=sceneSidebarMode!=="actors";
+  document.getElementById("addMovableObject").disabled=!canAuthor();
   const shotsActive = sceneSidebarMode === "shots";
   const setupsActive = sceneSidebarMode === "setups";
   const blockoutActive = sceneSidebarMode === "blockout";
@@ -4158,7 +4235,7 @@ function renderActors() {
   elements.blockoutSidebarMode.setAttribute("aria-pressed", String(blockoutActive));
   elements.scenePanelTitle.textContent = shotsActive
     ? "运镜"
-    : setupsActive ? "机位" : blockoutActive ? "环境" : "演员";
+    : setupsActive ? "机位" : blockoutActive ? "环境" : "对象";
   // 环境页把现成 GLB 与图片建模分成两个明确入口；图片建模会话本身长期保存在项目里。
   // 该模式下真实 file input 覆盖在按钮上接收点击，按钮退为纯视觉。
   elements.addActor.classList.remove("concealed");
@@ -4240,7 +4317,7 @@ function actorListRowMarkup(actor, index, { roleName = "", nested = false } = {}
   const locked = actor.locked === true;
   const selected = selectedObject?.kind === "actor" && selectedObject.id === actor.id;
   const actorNumber = String(Number(index) + 1).padStart(2, "0");
-  const label = roleName ? `${roleName} · 演员 ${actorNumber}` : `演员 ${actorNumber}`;
+  const label = actor.movableObject ? escapeHTML(actor.movableObject.name) : roleName ? `${roleName} · 演员 ${actorNumber}` : `演员 ${actorNumber}`;
   return `
     <article class="actor-item ${nested ? "paired-actor-child" : ""} ${selected ? "selected" : ""} ${visible ? "" : "hidden-actor"} ${locked ? "locked-actor" : ""}" role="listitem" data-actor-row="${escapeHTML(actor.id)}">
       <button class="actor-main" type="button" data-actor-id="${escapeHTML(actor.id)}" aria-pressed="${selected}">
@@ -5088,7 +5165,7 @@ function renderInspectorTabs() {
   else if (inspectorPanel === "camera") {
     title = selectedObject?.kind === "cameraSetup" ? "机位" : "运镜";
   } else if (selectedObject?.kind === "actor") {
-    title = "演员";
+    title = findActor(project,selectedObject.id)?.movableObject ? "物体" : "演员";
   } else if (selectedObject?.kind === "environment") {
     title = "视觉环境";
   } else if (selectedObject?.kind === "blockoutGroup") {
@@ -5128,7 +5205,7 @@ function selectionSummary() {
   }
   if (kind === "actor") {
     const index = project.scene.actors.findIndex((actor) => actor.id === selectedObject.id);
-    return index >= 0 ? { type: "演员", name: actorTimelineName(index) } : null;
+    return index >= 0 ? { type: project.scene.actors[index].movableObject?"物体":"演员", name: actorTimelineName(index) } : null;
   }
   {}
   if (kind === "environment") {
@@ -5200,6 +5277,7 @@ function renderCameraWorkspace() {
   elements.cameraProgress.max=String(duration); elements.cameraProgress.step=String(1/project.output.frameRate);
   elements.cameraTotalTime.textContent=formatTime(duration); elements.cameraRecordActions.hidden=false;
   elements.cancelCameraExport.hidden=!busy || exportState.status==='encoding';
+  elements.exportCameraFrame.disabled=busy||!shot||!cameraTrackReady(shot.camera.track);
   elements.recordCameraOutput.disabled=busy||!shot||!cameraTrackReady(shot.camera.track);
   updateCameraWorkspaceTransport(); updateCameraExportProgress(); enhanceAllSelects();
 }
@@ -5255,6 +5333,7 @@ function updateCameraExportProgress() {
   const labels = {
     preparing: "正在载入输出所需资产",
     rendering: `逐帧渲染 ${exportState.completedFrames} / ${exportState.frameCount}`,
+    "saving-frame": "正在保存 PNG 图片",
     encoding: "正在编码 H.264 MP4",
     "baking-blend": `正在烘焙 Blender 场景 ${exportState.completedFrames} / ${exportState.frameCount}`,
     "building-blend": "正在创建并验证 .blend",
@@ -5488,7 +5567,8 @@ function renderCameraTimeline() {
   const recordingShot=recordTarget?.kind===cameraEditKinds.shot;
   const setupStaged=recordTarget?.kind===cameraEditKinds.setup&&Boolean(cameraEditSession.setupEdit(recordTarget.targetID));
   const setupSaveLabel=setupStaged?'保存当前构图':'构图已保存';
-  const poseRecordLabel=poseActor&&actorPoseKeyframeAtTime(poseActor.poseTrack,playback.elapsed,project.output.frameRate)?'更新人物帧':'添加人物帧';
+  const poseFrameName=poseActor?.movableObject?'物体帧':'人物帧';
+  const poseRecordLabel=(poseActor&&actorPoseKeyframeAtTime(poseActor.poseTrack,playback.elapsed,project.output.frameRate)?'更新':'添加')+poseFrameName;
   const visible = viewportMode === viewportModes.edit;
   elements.cameraTimeline.hidden = !visible;
   // 走带是静态节点，寄居在时间轴里。清空 innerHTML 会连它一起销毁，
@@ -5534,11 +5614,11 @@ function renderCameraTimeline() {
       </div>
       <div id="timelineSelection" class="timeline-selection" aria-live="polite"></div>
       <div class="camera-timeline-actions">
-        ${poseActor?`<button class="timeline-icon-button" data-actor-pose-jump="previous" type="button" aria-label="上一个人物帧">${timelineIcon('prev')}</button>
+        ${poseActor?`<button class="timeline-icon-button" data-actor-pose-jump="previous" type="button" aria-label="上一个${poseFrameName}">${timelineIcon('prev')}</button>
           <button id="recordActorPoseTimeline" class="timeline-icon-button timeline-record-button" type="button" aria-label="${poseRecordLabel}" title="${poseRecordLabel}（K）" aria-keyshortcuts="K" ${!canAuthor()||poseActor.locked?'disabled':''}>${timelineIcon('keyframe')}<span>${poseRecordLabel}</span></button>
-          <button id="selectAllActorPoseFrames" class="timeline-icon-button" type="button" aria-label="全选人物帧" title="全选人物帧（⌘A / Ctrl+A）">全选</button>
-          <button class="timeline-icon-button" data-actor-pose-jump="next" type="button" aria-label="下一个人物帧">${timelineIcon('next')}</button>
-          <button id="deleteActorPoseTimeline" class="timeline-icon-button danger" type="button" aria-label="删除人物帧" ${!canAuthor()||!currentActorPoseIDs(poseActor).size?'disabled':''}>${timelineIcon('delete')}</button>`:''}
+          <button id="selectAllActorPoseFrames" class="timeline-icon-button" type="button" aria-label="全选${poseFrameName}" title="全选${poseFrameName}（⌘A / Ctrl+A）">全选</button>
+          <button class="timeline-icon-button" data-actor-pose-jump="next" type="button" aria-label="下一个${poseFrameName}">${timelineIcon('next')}</button>
+          <button id="deleteActorPoseTimeline" class="timeline-icon-button danger" type="button" aria-label="删除${poseFrameName}" ${!canAuthor()||!currentActorPoseIDs(poseActor).size?'disabled':''}>${timelineIcon('delete')}</button>`:''}
         ${!poseActor&&!recordingShot ? `<button id="recordSelectedKeyframe" class="timeline-icon-button timeline-record-button" type="button" aria-keyshortcuts="K" title="${recordTarget?setupSaveLabel+(setupStaged?'（K）':''):'先选择人物、运镜或机位'}" ${!recordTarget||!canAuthor()||!setupStaged?'disabled':''}>${timelineIcon('keyframe')}<span>${recordTarget?setupSaveLabel:'添加关键帧'}</span></button>`:''}
         <button class="timeline-icon-button" type="button" data-timeline-jump="start" title="回到开始（Ctrl + ,）" aria-label="回到开始" aria-keyshortcuts="Control+Comma">${timelineIcon("jumpStart")}</button>
         ${track && recordingShot ? `
@@ -6011,7 +6091,7 @@ function motionPhaseLabel(phase) {
 }
 
 function actorTimelineName(index) {
-  return `演员 ${String(index + 1).padStart(2, "0")}`;
+  return project.scene.actors[index]?.movableObject?.name || `演员 ${String(index + 1).padStart(2, "0")}`;
 }
 
 function authoredTimelinePhases(actor) {
@@ -6992,15 +7072,61 @@ function renderInspectorContent() {
   renderActorInspector(actor);
 }
 
+async function objectRequest(url,body={}) {
+  const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error || '物体操作失败。');return result;
+}
+function updateMovableObjectJobUI(actor,state){
+  const active=['starting','running','attention','stopping'].includes(state.phase);
+  const bound=actor.movableObject.codex?.projectID===project.id;
+  const generate=document.getElementById('generateMovableObject');
+  if(generate){generate.disabled=active;generate.textContent=active?'制作中…':['error','cancelled'].includes(state.phase)?'重试制作':bound?'继续制作':'开始制作';}
+  const open=document.getElementById('continueObjectInCodex');if(open)open.hidden=!bound;
+  const status=document.getElementById('movableObjectStatus');if(status)status.textContent=state.message || (actor.movableObject.primitives.length?'外形已保存。':'等待制作外形。');
+  const cancel=document.getElementById('cancelObjectGeneration');if(cancel){cancel.hidden=!active;cancel.disabled=state.phase==='stopping';cancel.textContent=state.phase==='stopping'?'正在停止…':'停止生成';}
+}
+function wireMovableObjectCreation(){
+  const dialog=document.getElementById('newMovableObjectDialog');
+  document.getElementById('addMovableObject').addEventListener('click',()=>{document.getElementById('newMovableObjectError').textContent='';dialog.showModal();document.getElementById('newMovableObjectName').focus();});
+  document.getElementById('cancelNewMovableObject').addEventListener('click',()=>dialog.close());
+  document.getElementById('newMovableObjectForm').addEventListener('submit',async event=>{
+    event.preventDefault();const button=document.getElementById('submitNewMovableObject');button.disabled=true;
+    try{
+      const name=document.getElementById('newMovableObjectName').value.trim(),description=document.getElementById('newMovableObjectDescription').value.trim();
+      if(!name||!description)throw new Error('请填写名称和物体描述。');
+      await saveProjectNow(false);const projectID=project.id,id=crypto.randomUUID();
+      if(!await commitProject(current=>addMovableObject(current,{id,name,description}),'已新建物体'))return;
+      selectActor(id);dialog.close();event.target.reset();
+      await saveProjectNow(false);
+      await objectRequest(`/api/projects/${projectID}/movable-objects/${id}/generate`);showToast('Codex 正在制作外形');
+    }catch(error){if(dialog.open)document.getElementById('newMovableObjectError').textContent=error.message;else showToast(error.message,true);}
+    finally{button.disabled=false;}
+  });
+  let polling=false;
+  setInterval(async()=>{
+    const actor=findActor(project,selectedActorID);if(!actor?.movableObject||polling)return;
+    polling=true;
+    try{
+      const projectID=project.id;
+      const response=await fetch(`/api/projects/${projectID}/movable-objects/${actor.id}`);
+      const state=await response.json();if(!response.ok)throw new Error(state.error);
+      if(project.id!==projectID || selectedActorID!==actor.id)return;
+      updateMovableObjectJobUI(findActor(project,actor.id),state);
+    }catch(error){const status=document.getElementById('movableObjectStatus');if(status)status.textContent=error.message;}
+    finally{polling=false;}
+  },2000);
+}
+
 function renderActorInspector(actor) {
   const pose=actorPoseValue(actor);
   const pairedAction = null;
   const pairedRole = pairedAction?.roles.X.actorID === actor.id ? "X" : "Y";
   elements.inspectorContent.innerHTML = `
+    ${actor.movableObject ? `<section class="inspector-section"><h2>${escapeHTML(actor.movableObject.name)}</h2><p id="movableObjectStatus" role="status">${actor.movableObject.primitives.length?'外形已保存。':'正在连接 Codex…'}</p><div class="object-job-actions"><button id="generateMovableObject" class="secondary-button" type="button">${actor.movableObject.codex?.projectID===project.id?'继续制作':'开始制作'}</button><button id="continueObjectInCodex" class="secondary-button" type="button" ${actor.movableObject.codex?.projectID===project.id?'':'hidden'}>在 Codex 中继续修改</button><button id="cancelObjectGeneration" class="secondary-button" type="button" hidden>停止生成</button></div></section>` : ''}
     <details id="actorTransform" class="inspector-section inspector-disclosure" ${actorTransformExpanded ? "open" : ""}>
       <summary>整体位置与初始面向</summary>
       <div class="inspector-disclosure-content">
-      <p class="section-caption">平移人物和整条走位路径</p>
+      <p class="section-caption">平移${actor.movableObject?"物体":"人物"}和整条走位路径</p>
       <div class="transform-field-grid two-column">
         <label><span>X</span><input data-actor-position="x" type="number" step="any" data-scrub-step="0.05" value="${Number(actor.position.x).toFixed(2)}" /></label>
         <label><span>Y</span><input data-actor-position="y" type="number" step="any" data-scrub-step="0.05" value="${Number(actor.position.y).toFixed(2)}" /></label>
@@ -7012,7 +7138,7 @@ function renderActorInspector(actor) {
     <details id="actorPerformance" class="inspector-section inspector-disclosure" ${actorPerformanceExpanded ? "open" : ""}>
       <summary>动作内偏移与姿态</summary>
       <div class="inspector-disclosure-content">
-      <p class="section-caption">人物帧控制 · 位置相对走位方向；朝向偏移归零即使用动作面向</p>
+      <p class="section-caption">${actor.movableObject?"物体":"人物"}帧控制 · 位置相对走位方向；朝向偏移归零即使用动作面向</p>
       <div class="transform-field-grid two-column">
         ${['offsetX','offsetY','offsetZ'].map((key,index)=>`<label><span>${['X 左右','Y 上下','Z 前后'][index]}</span><div class="input-with-unit"><input data-actor-pose="${key}" aria-label="${actorPoseParameters[key].label}（米）" type="number" required min="-1000" max="1000" step="any" value="${pose[key].toFixed(3)}" /><span>m</span></div></label>`).join('')}
       </div>
@@ -7035,7 +7161,7 @@ function renderActorInspector(actor) {
       <details class="actor-pose-parameters" ${actorPoseParametersExpanded?'open':''}>
         <summary>姿态参数</summary>
         <div class="transform-field-grid two-column">
-        ${Object.entries(actorPoseParameters).filter(([key])=>!['rotationYOffset','rotationX','rotationZ','offsetX','offsetY','offsetZ'].includes(key)).map(([key,spec])=>{
+        ${Object.entries(actorPoseParameters).filter(([key])=>!actor.movableObject && !['rotationYOffset','rotationX','rotationZ','offsetX','offsetY','offsetZ'].includes(key)).map(([key,spec])=>{
           const scale=spec.unit==='angle'?180/Math.PI:1;
           return `<label><span>${spec.label}</span><div class="input-with-unit"><input data-actor-pose="${key}" type="number" required min="${spec.min*scale}" max="${spec.max*scale}" step="any" data-scrub-step="${spec.unit==='angle'?'0.1':spec.unit==='meters'?'0.001':'0.01'}" value="${(pose[key]*scale).toFixed(spec.unit==='angle'?1:spec.unit==='meters'?3:2)}" /><span>${spec.unit==='angle'?'°':spec.unit==='meters'?'m':'×'}</span></div></label>`;
         }).join('')}
@@ -7047,7 +7173,7 @@ function renderActorInspector(actor) {
     <details id="actorAppearance" class="inspector-section inspector-disclosure" ${actorAppearanceExpanded ? "open" : ""}>
       <summary>外观</summary>
       <div class="inspector-disclosure-content">
-        <div class="field">
+        ${actor.movableObject ? "" : `<div class="field">
           <label>角色</label>
           <div class="segment-control">
             ${["blocking-figure"].map((id) => `<button type="button" data-character="${id}" class="${actor.characterAssetID === id ? "selected" : ""}">${id === "blocking-figure" ? "抽象人" : id === "xbot" ? "X Bot" : "Y Bot"}</button>`).join("")}
@@ -7066,8 +7192,9 @@ function renderActorInspector(actor) {
             <input id="actorColorHex" type="text" required value="${actorColor(actor)}" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="抽象人 HEX 色值" title="输入 #RRGGBB 格式，例如 #D97757" />
           </div>
         </div>`}
+        `}
         <div class="field">
-          <div class="field-heading"><label for="actorScale">身高比例</label><span id="actorScaleValue" class="field-value">${actor.scale.toFixed(2)}×</span></div>
+          <div class="field-heading"><label for="actorScale">${actor.movableObject?"整体比例":"身高比例"}</label><span id="actorScaleValue" class="field-value">${actor.scale.toFixed(2)}×</span></div>
           <label><span class="sr-only">身高比例数值</span><input id="actorScale" type="number" min="0.5" max="2" step="any" data-scrub-step="0.01" value="${actor.scale.toFixed(2)}" /></label>
         </div>
       </div>
@@ -7075,6 +7202,25 @@ function renderActorInspector(actor) {
     ${`<div id="actorMotionHost"></div>`}
   `;
 
+  if(actor.movableObject){
+    const objectProjectID=project.id;
+    const endpoint=`/api/projects/${objectProjectID}/movable-objects/${actor.id}`;
+    const stillSelected=()=>project.id===objectProjectID && selectedActorID===actor.id;
+    document.getElementById('generateMovableObject').addEventListener('click',async()=>{
+      updateMovableObjectJobUI(actor,{phase:'starting',message:'正在连接 Codex…'});
+      try{await saveProjectNow(false);const state=await objectRequest(endpoint+'/generate');if(stillSelected())updateMovableObjectJobUI(actor,state);}
+      catch(error){if(stillSelected())updateMovableObjectJobUI(actor,{phase:'error',message:error.message});}
+    });
+    document.getElementById('continueObjectInCodex').addEventListener('click',async()=>{
+      try{await saveProjectNow(false);await objectRequest(endpoint+'/open');}
+      catch(error){if(stillSelected())document.getElementById('movableObjectStatus').textContent=error.message;}
+    });
+    document.getElementById('cancelObjectGeneration').addEventListener('click',async()=>{
+      updateMovableObjectJobUI(actor,{phase:'stopping',message:'正在停止…'});
+      try{await objectRequest(endpoint+'/cancel');}
+      catch(error){if(stillSelected())updateMovableObjectJobUI(actor,{phase:'error',message:error.message});}
+    });
+  }
   document.getElementById("actorAppearance")?.addEventListener("toggle", (event) => {
     actorAppearanceExpanded = event.currentTarget.open;
   });
@@ -7136,7 +7282,7 @@ function renderActorInspector(actor) {
   for (const button of elements.inspectorContent.querySelectorAll("[data-color-index]")) {
     button.addEventListener("click", () => commitProject((current) => setActorProperty(current, actor.id, "clothingColorIndex", Number(button.dataset.colorIndex)), "识别色已更新"));
   }
-  {
+  if (!actor.movableObject) {
     const picker = document.getElementById("actorColorPicker");
     const hex = document.getElementById("actorColorHex");
     picker.disabled = hex.disabled = !canAuthor();
@@ -7445,7 +7591,7 @@ function renderMotionRows(actor) {
             <button class="motion-delete" type="button" data-delete-action="${escapeHTML(action.id)}" title="删除动作" aria-label="删除动作">×</button>
           </span>
         </div>
-        ${`<label class="motion-control blocking-posture-control">动作
+        ${actor.movableObject?"":`<label class="motion-control blocking-posture-control">动作
           <select data-action-value="posture" data-action-id="${escapeHTML(action.id)}" aria-label="停留动作">
             ${action.gesture || action.joints ? '<option value="custom" selected disabled>自定义动作</option>' : ""}
             <option value="stand" ${!action.gesture && !action.joints && action.posture !== "sit" ? "selected" : ""}>站立</option>
@@ -8721,7 +8867,7 @@ function renderCameraInspector() {
             ${selectedFollow.enabled ? `<label class="camera-constraint-target"><span>目标演员</span>
               <select id="cameraFollowTarget" aria-label="位置跟随目标演员" ${canEdit && project.scene.actors.length ? "" : "disabled"}>
                 ${!followTargetExists && selectedFollow.targetActorID ? `<option value="${escapeHTML(selectedFollow.targetActorID)}" selected>目标已删除</option>` : ""}
-                ${project.scene.actors.map((actor, index) => `<option value="${escapeHTML(actor.id)}" ${actor.id === selectedFollow.targetActorID ? "selected" : ""}>演员 ${String(index + 1).padStart(2, "0")}</option>`).join("")}
+                ${project.scene.actors.map((actor, index) => `<option value="${escapeHTML(actor.id)}" ${actor.id === selectedFollow.targetActorID ? "selected" : ""}>${escapeHTML(actorTimelineName(index))}</option>`).join("")}
               </select>
             </label>` : ""}
             ${selectedFollow.enabled && !followTargetExists ? `<p class="warning">目标演员已不存在；当前回退到摄影机轨道。</p>` : ""}
@@ -8741,7 +8887,7 @@ function renderCameraInspector() {
             ${selectedAim.mode === "look-at" ? `<label class="camera-constraint-target"><span>锁定目标</span>
               <select id="cameraAimTarget" aria-label="方向锁定目标" ${canEdit ? "" : "disabled"}>
                 ${!aimTargetExists && selectedAim.targetKind === "actor" && selectedAim.targetActorID ? `<option value="actor:${escapeHTML(selectedAim.targetActorID)}" selected>目标已删除</option>` : ""}
-                ${project.scene.actors.map((actor, index) => `<option value="actor:${escapeHTML(actor.id)}" ${selectedAim.targetKind === "actor" && actor.id === selectedAim.targetActorID ? "selected" : ""}>演员 ${String(index + 1).padStart(2, "0")}</option>`).join("")}
+                ${project.scene.actors.map((actor, index) => `<option value="actor:${escapeHTML(actor.id)}" ${selectedAim.targetKind === "actor" && actor.id === selectedAim.targetActorID ? "selected" : ""}>${escapeHTML(actorTimelineName(index))}</option>`).join("")}
                 ${cameraEnvironmentTargetOptions(selectedAim.targetKind === "environment" ? `environment:${selectedAim.environmentID}` : "")}
                 <option value="world" ${selectedAim.targetKind === "world" ? "selected" : ""}>场景自定义点</option>
               </select>
@@ -8801,7 +8947,7 @@ function renderCameraInspector() {
           <div class="camera-orbit-grid">
           <label class="camera-orbit-target"><span>环绕中心</span>
             <select id="cameraOrbitTarget" ${canEditCameraOrbit() ? "" : "disabled"}>
-              ${project.scene.actors.map((actor, index) => `<option value="actor:${escapeHTML(actor.id)}" ${orbitForm.targetValue === `actor:${actor.id}` ? "selected" : ""}>演员 ${String(index + 1).padStart(2, "0")}</option>`).join("")}
+              ${project.scene.actors.map((actor, index) => `<option value="actor:${escapeHTML(actor.id)}" ${orbitForm.targetValue === `actor:${actor.id}` ? "selected" : ""}>${escapeHTML(actorTimelineName(index))}</option>`).join("")}
               ${cameraEnvironmentTargetOptions(orbitForm.targetValue)}
               <option value="world" ${orbitForm.targetValue === "world" ? "selected" : ""}>场景自定义点</option>
             </select>
@@ -9779,7 +9925,7 @@ function escapeHTML(value) {
  document.getElementById('manageProjectsLite').addEventListener('click',()=>openProjectManager());
 document.getElementById('showShortcuts').addEventListener('click', openShortcutsDialog);
 document.getElementById('exitServiceLite').addEventListener('click',async()=>{
-  if(isExporting()){showToast('请先完成或取消 MP4 导出。',true);return;}
+  if(isExporting()){showToast('请先完成或取消导出。',true);return;}
   try{if(!await saveProjectNow(false))throw new Error("当前项目尚未保存");const response=await fetch('/api/service/shutdown',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const result=await response.json();if(!response.ok)throw new Error(result.error);operatorSubscription?.();updateUI.stop();document.getElementById('exitServiceLite').disabled=true;setSaveState('服务已退出');showToast('本地服务已退出。点击 Film Space Lite 图标可重新打开。');}catch(error){showToast('退出失败：'+error.message,true);}
 });
 window.addEventListener('pagehide',()=>{if(exportState.taskID&&exportState.status==='rendering')navigator.sendBeacon('/api/exports/'+encodeURIComponent(exportState.taskID),new Blob(['{}'],{type:'application/json'}));});
@@ -9831,7 +9977,7 @@ function recordActorPoseAtPlayhead() {
   const actor=actorPoseTarget();
   if(!actor || !canAuthor() || actor.locked)return;
   if([...elements.inspectorContent.querySelectorAll('[data-actor-pose]')].some(input=>!input.reportValidity()))return;
-  const pose=actorPoseDraft?.pose ?? actorFramePose(actorPoseValue(actor));
+  const pose=actorPoseDraft?.pose ?? Object.fromEntries(Object.entries(actorFramePose(actorPoseValue(actor))).filter(([key])=>!actor.movableObject || ['offsetX','offsetY','offsetZ','rotationYOffset','rotationX','rotationZ'].includes(key)));
   actorPoseDraft={projectID:project.id,actorID:actor.id,time:playback.elapsed,pose};persistActorPoseDraft();
 }
 function returnActorToPath() {
@@ -9872,7 +10018,7 @@ function syncActorPoseFields() {
     input.value=(pose[input.dataset.actorPose]*(spec.unit==='angle'?180/Math.PI:1)).toFixed(spec.unit==='angle'?1:spec.unit==='meters'?3:2);
   }
   const button=document.getElementById('recordActorPoseInspector');
-  if(button)button.textContent=actorPoseKeyframeAtTime(actor.poseTrack,playback.elapsed,project.output.frameRate)?'更新人物帧':'添加人物帧';
+  if(button)button.textContent=(actorPoseKeyframeAtTime(actor.poseTrack,playback.elapsed,project.output.frameRate)?'更新':'添加')+(actor.movableObject?'物体帧':'人物帧');
   const status=document.getElementById('actorPoseFrameStatus');
   if(status)status.textContent=`${playback.elapsed.toFixed(2)} s${actorPoseDraft?.actorID===actor.id?' · 调整未记录':''}`;
   const cancel=document.getElementById('cancelActorPoseInspector');

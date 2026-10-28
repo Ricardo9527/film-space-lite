@@ -23,7 +23,7 @@ import {
 
 export { desktopActions } from "./action-catalog.js";
 
-export const desktopProjectSchemaVersion = 71;
+export const desktopProjectSchemaVersion = 72;
 
 // Keep the index and color values aligned with HumanFigureFactory on Phone Lite.
 export const clothingColors = [
@@ -149,6 +149,7 @@ export function createActor(options = {}) {
     clothingColorIndex: clampInteger(options.clothingColorIndex, 0, clothingColors.length - 1, 0),
     blockingColor: normalizeBlockingColor(options.blockingColor, options.characterAssetID),
     characterAssetID: blockingCharacterID,
+    ...(options.movableObject ? {movableObject: normalizeMovableObject(options.movableObject)} : {}),
     scale: clampFinite(options.scale, 0.5, 2, 1),
     animationID: "idle",
     visible: options.visible !== false,
@@ -317,6 +318,7 @@ export function duplicateActor(project, actorID) {
       position: addVectors(action.position, offset),
     })),
   };
+  if (duplicate.movableObject) delete duplicate.movableObject.codex;
   duplicate.motionActions = reflowMotionActions(
     duplicate.motionActions,
     duplicate.position,
@@ -1003,6 +1005,34 @@ export function createBlockoutObject(options = {}) {
         }))
       : [],
   };
+}
+
+export function normalizeMovableObject(value) {
+  if (!value || typeof value !== "object") throw new Error("物体外形必须是对象。");
+  if (!Array.isArray(value.primitives) || value.primitives.length > 200) throw new Error("物体需要 0–200 个基础部件。");
+  for (const part of value.primitives) {
+    if (!blockoutPrimitiveKinds.includes(part.kind)) throw new Error("不支持的物体部件类型。");
+    for (const field of ["position", "rotation", "size"]) {
+      if (part[field] && ["x","y","z"].some(key => !Number.isFinite(part[field][key]) || (field === "size" && part[field][key] <= 0))) throw new Error("物体部件尺寸和变换无效。");
+    }
+  }
+  const codex = value.codex;
+  if (codex && (!validID(codex.projectID) || !validID(codex.threadID))) throw new Error("物体聊天绑定无效。");
+  return {name: cleanName(value.name, "新物体"), description: String(value.description || "").slice(0,8000),
+    primitives: value.primitives.map(createBlockoutPrimitive),
+    ...(codex ? {codex: {projectID:codex.projectID,threadID:codex.threadID}} : {})};
+}
+
+export function addMovableObject(project, options = {}) {
+  return addActor(project, {...options, movableObject: {name:options.name,description:options.description,primitives:options.primitives || []}});
+}
+
+// Shape edits deliberately preserve every authored transform, action, frame and conversation binding.
+export function updateMovableObject(project, id, patch) {
+  const actor = findActor(project,id);
+  if (!actor?.movableObject) throw new Error("物体不存在："+id);
+  if (actor.locked) throw new Error("物体已锁定："+id);
+  return updateActor(project,id,current=>({...current,movableObject:normalizeMovableObject({...current.movableObject,...patch})}));
 }
 
 export function createBlockoutPrimitive(options = {}) {
@@ -1860,7 +1890,11 @@ function normalizeActor(input, index, usedActorIDs, sourceVersion) {
     }
     actor.poseTrack=createActorPoseTrack(actor.poseTrack);
   }
-  if ((sourceVersion ?? 0) < 69) migrateSeatedFootAnchors(actor);
+  if(actor.movableObject){
+    if(actor.motionActions.some(action=>action.posture==='sit'||action.gesture!=null||action.joints!=null))throw new Error('物体不支持人物动作。');
+    if(actor.poseTrack.keyframes.some(frame=>Object.entries(frame.pose).some(([key,value])=>['torsoPitch','headPitch'].includes(key)&&value!==0)))throw new Error('物体帧不支持人物姿态。');
+  }
+  if ((sourceVersion ?? 0) < 69 && !actor.movableObject) migrateSeatedFootAnchors(actor);
   return actor;
 }
 

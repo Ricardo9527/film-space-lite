@@ -6,6 +6,7 @@ const {createProjectRepository}=require('./app/project-repository.cjs');
 const {createExportManager}=require('./app/export-manager.cjs');
 const updateChecker=require('./app/update-checker.cjs').createUpdateChecker();
 const {createUpdateManager}=require('./app/update-manager.cjs');
+const {createObjectJobs,openCodexThread}=require('./app/codex-object-jobs.cjs');
 const appVersion=require('../native/lite/version.json').version;
 const paths=litePaths();
 const PROJECT_ROOT=process.env.FILM_SPACE_PROJECT_DIR||paths.projects;
@@ -16,9 +17,18 @@ const operatorEventClients=new Set(),operatorSelections=new Map(),pendingViewpor
 let projectCommandServicePromise=null,projectModelPromise=null;
 const exportTouches=new Map();
 let activeBusinessRequests=0;
+const objectJobs=createObjectJobs({dataRoot:paths.root,runtime:path.resolve(__dirname,'..'),serviceFile:process.env.FILM_SPACE_SERVICE_FILE||paths.service,readProject:requireProject,
+ async bindThread(projectID,objectID,threadID){
+  const model=await projectModel();const current=requireProject(projectID);
+  const actor=current.scene.actors.find(actor=>actor.id===objectID);
+  if(!actor?.movableObject)throw new Error('物体已删除。');
+  actor.movableObject.codex={projectID,threadID};
+  const next=model.normalizeDesktopProject(current);
+  const saved=projectRepository.saveVersioned(next,current.revision);publishProjectChange(saved,'codex-object');
+ }});
 const updater=createUpdateManager({checker:updateChecker,runtime:path.resolve(__dirname,'..'),dataRoot:paths.root,
  projectRoot:PROJECT_ROOT,serviceFile:process.env.FILM_SPACE_SERVICE_FILE||paths.service,getPort:()=>server.address().port,
- busyReason:()=>activeBusinessRequests?'后台操作正在执行。':exportManager.activeCount()?'MP4 正在导出。':pendingViewportCaptures.size||pendingPlayheadRequests.size?'MCP 画面操作正在执行。':null,
+ busyReason:()=>objectJobs.activeCount()?'Codex 正在制作物体。':activeBusinessRequests?'后台操作正在执行。':exportManager.activeCount()?'MP4 正在导出。':pendingViewportCaptures.size||pendingPlayheadRequests.size?'MCP 画面操作正在执行。':null,
  onCommit:()=>shutdownDirector()});
 const server=http.createServer((req,res)=>dispatchHTTPRequest(req,res).catch(error=>handleHTTPRequestError(req,res,error)));
 async function dispatchHTTPRequest(req,res){
@@ -48,9 +58,11 @@ async function handleHTTPRequest(req,res){
  if(pathname==='/health'){sendJSON(res,200,{service:'film-space-lite',edition:'lite',appVersion,status:updater.isGated()?'updating':'ok',port:server.address().port,pid:process.pid,runtimeMode:RUNTIME_MODE,projectWritable:projectStorageStatus.writable,projectStorageErrorCode:projectStorageStatus.errorCode});return;}
  if(pathname==='/api/service/shutdown'&&req.method==='POST'){
   requireLocalOutputRequest(req);
+  if(objectJobs.activeCount()){const error=new Error('请先完成或停止物体生成。');error.statusCode=409;throw error;}
   if(exportManager.activeCount()){const error=new Error('请先完成或取消 MP4 导出。');error.statusCode=409;throw error;}
   sendJSON(res,200,{stopping:true});setImmediate(()=>shutdownDirector());return;
  }
+ if(await handleObjectAPI(req,res,pathname))return;
  if(await handleOutputAPI(req,res,pathname)||await handleProjectAPI(req,res,pathname))return;
  if((pathname==='/'||pathname==='/index.html')&&updater.isGated()){
   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
@@ -60,6 +72,30 @@ async function handleHTTPRequest(req,res){
  for(const [prefix,root] of [['/vendor/',VENDOR_ROOT],['/assets/',ASSETS_ROOT],['/app/',APP_ROOT]])if(pathname.startsWith(prefix)){serveStatic(req,res,prefix,root);return;}
  sendJSON(res,404,{error:'Not found'});
 }
+async function handleObjectAPI(req,res,pathname){
+ const match=pathname.match(/^\/api\/projects\/([a-zA-Z0-9-]+)\/movable-objects(?:\/([a-zA-Z0-9-]+)(?:\/(open|cancel|generate))?)?$/);
+ if(!match)return false;
+ requireLocalOutputRequest(req);
+ if(req.headers.origin && new URL(req.headers.origin).port!==String(server.address().port)){const error=new Error('物体操作只接受本机应用页面。');error.statusCode=403;throw error;}
+ const [,projectID,objectID,action]=match;
+ if(req.method==='GET'&&objectID){sendJSON(res,200,objectJobs.get(projectID,objectID)||{phase:'idle',message:''});return true;}
+ if(req.method!=='POST'){sendJSON(res,405,{error:'Method not allowed'});return true;}
+ const model=await projectModel();
+ if(!objectID){sendJSON(res,404,{error:'Object ID required'});return true;}
+ const actor=requireProject(projectID).scene.actors.find(actor=>actor.id===objectID);
+ if(!actor?.movableObject)throw new Error('物体不存在。');
+ if(action==='cancel'){await objectJobs.cancel(projectID,objectID);sendJSON(res,200,{ok:true});return true;}
+ const binding=actor.movableObject.codex;
+ if(action==='open'){
+  if(!binding||binding.projectID!==projectID)throw new Error('此物体尚未绑定当前项目的 Codex 聊天。');
+  await openCodexThread(binding.threadID);sendJSON(res,200,{ok:true});return true;
+ }
+ if(action==='generate'){
+  sendJSON(res,202,objectJobs.start(projectID,objectID,actor.movableObject.description||actor.movableObject.name));return true;
+ }
+ sendJSON(res,404,{error:'Unknown object operation'});return true;
+}
+
 function handleHTTPRequestError(req,res,error){
  console.error('[http]',req.method,req.url,error);
  if(res.destroyed||res.writableEnded)return;
@@ -824,6 +860,15 @@ async function handleOutputAPI(req, res, pathname) {
 
   
 
+  if (pathname === "/api/exports/frame" && req.method === "POST") {
+    const params = new URL(req.url, `http://${req.headers.host}`).searchParams;
+    const buffer = await readRequestBuffer(req, 32 * 1024 * 1024);
+    sendJSON(res, 200, exportManager.saveFrame({
+      outputFolder: params.get("outputFolder"), fileName: params.get("fileName"),
+    }, buffer));
+    return true;
+  }
+
   if (pathname === "/api/exports" && req.method === "POST") {
     const payload = JSON.parse(await readRequestBody(req));
     const task=exportManager.start(payload);exportTouches.set(task.id,{touched:Date.now(),encoding:false});sendJSON(res,201,task);
@@ -983,6 +1028,7 @@ function sendJSON(res, statusCode, value) {
   res.end(JSON.stringify(value));
 }
 function shutdownDirector(){
+ objectJobs.close();
  updater.stop();
  clearInterval(exportExpiry);
  for(const response of operatorEventClients)response.end();

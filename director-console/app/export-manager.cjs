@@ -20,6 +20,40 @@ function createExportManager(options = {}) {
 
   return {
     get activeCount() { return sessions.size; },
+    saveFrame(spec, buffer) {
+      const folder = typeof spec.outputFolder === "string" ? spec.outputFolder.trim() : "";
+      if (!folder || !path.isAbsolute(folder)) throw requestError("请选择输出文件夹", 400);
+      if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+        throw requestError("输出文件夹不存在，请重新选择", 400);
+      }
+      const stem = String(spec.fileName || "").trim().replace(/\.png$/i, "").trim();
+      if (!stem || /^\.+$/.test(stem) || stem.length > 60 || /[<>:"/\\|?*\x00-\x1f]/.test(stem)) {
+        throw requestError("图片名称无效", 400);
+      }
+      if (!Buffer.isBuffer(buffer) || buffer.length < 8 || !buffer.subarray(0, 8).equals(pngSignature)) {
+        throw requestError("输出帧必须是 PNG", 415);
+      }
+      const temporaryDirectory = fs.mkdtempSync(path.join(tempRoot, "frame-"));
+      const temporaryPath = path.join(temporaryDirectory, "frame.png");
+      try {
+        fs.writeFileSync(temporaryPath, buffer);
+        for (let version = 1; version <= 9999; version += 1) {
+          const suffix = version === 1 ? "" : `_v${String(version).padStart(3, "0")}`;
+          const fileName = `${stem}${suffix}.png`;
+          const outputPath = path.join(folder, fileName);
+          try {
+            fs.copyFileSync(temporaryPath, outputPath, fs.constants.COPYFILE_EXCL);
+            return { fileName, outputPath, bytes: buffer.length };
+          } catch (error) {
+            if (error.code !== "EEXIST") throw error;
+          }
+        }
+        throw requestError("输出版本号已用完", 409);
+      } finally {
+        fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+      }
+    },
+
     start(specInput) {
       const spec = normalizeExportSpec(specInput);
       if (!fs.existsSync(spec.outputFolder) || !fs.statSync(spec.outputFolder).isDirectory()) {

@@ -1,4 +1,4 @@
-import { recordActorPoseKeyframe, updateActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
+import { addMovableObject, updateMovableObject, recordActorPoseKeyframe, updateActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
 import { isBlockingActor } from "./blocking-actor.js";
 import { setProjectDefaultAspectRatio } from "./project-model.js";
 import { addActor, addBlockoutGroup, addBlockoutObject, addBlockoutPrimitive, addBlockoutReferenceImage, addCameraSetup, addMoveAction, addShot, addStayAction, clearMotion, clearBlockout, canInsertStayActionBefore, createVisualEnvironmentGroup, deleteActor, deleteBlockoutGroup, deleteBlockoutObject, deleteBlockoutPrimitive, deleteCameraSetup, deleteShot, deleteShotCameraKeyframe, deleteShotCameraKeyframes, desktopActions, duplicateActor, duplicateBlockoutGroup, duplicateBlockoutObject, duplicateBlockoutPrimitive, duplicateCameraSetup, duplicateShot, faceActionTowardNextTarget, faceActorTowardNextTarget, findActor, insertStayActionBefore, movePerformanceWithinPoint, moveShotCameraKeyframe, moveShotCameraKeyframes, normalizeDesktopProject, recordShotCameraKeyframe, removeBlockoutReferenceImage, removeMotionAction, removeVisualEnvironment, assignVisualEnvironmentsToGroup, dissolveVisualEnvironmentGroup, renameCameraSetup, renameProject, renameShot, retimeShotCameraTracks, setActiveShot, setActorLocked, setActorOrPairedRoleTransform, setActorProperty, setActorVisible, setBlockoutLayerLocked, setBlockoutLayerOpacity, setBlockoutLayerVisible, setCameraSetupAspectRatio, setCameraSetupDepthOfField, setCameraSetupPose, setManualSceneEnd, setPathPointPosition, setProjectFrameRate, setProjectOutputFolder, setSceneGroundVisible, setShotAspectRatio, setShotCameraDuration, setShotCameraDepthOfField, setShotCameraHandheld, setShotCameraInterpolation, setShotCameraSegmentInterpolation, setVisualEnvironmentAsset, setVisualEnvironmentLocked, setVisualEnvironmentMaterialMode, setVisualEnvironmentOpacity, setVisualEnvironmentTransform, setVisualEnvironmentVisible, renameVisualEnvironment, updateBlockoutGroup, updateBlockoutObject, updateBlockoutPrimitive, updateBlockoutReferenceImage, updateMotionAction, updateVisualEnvironmentGroup, updateShotCameraKeyframe, updateShotCameraKeyframeAim, updateShotCameraKeyframeFollow, updateShotCameraKeyframeFocusTracking } from "./project-model.js";
@@ -90,6 +90,10 @@ function applyOne(project, operation) {
       return deleteActorPoseKeyframes(project,operation.actorID,operation.keyframeIDs);
     case "set_actor_pose_interpolation":
       return setActorPoseInterpolation(project,operation.actorID,operation.interpolation);
+    case "add_movable_object":
+      return addMovableObject(project, operation);
+    case "update_movable_object":
+      return updateMovableObject(project, operation.id, operation.patch);
     case "add_actor":
       return addActor(project, operation.value || operation);
     case "duplicate_actor":
@@ -421,6 +425,11 @@ function validateOperationSemantics(project, operation) {
     if (missing) throw semanticError(`${operation.action}: camera keyframe not found in Shot: ${missing}`);
   }
   const blockingActor = findActor(project, operation.actorID || operation.id);
+  if (blockingActor?.movableObject) {
+    const values = operation.patch || operation.options || operation.pose || {};
+    if (["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(values,key))) throw semanticError("物体支持整体运动，不支持人物动作。");
+    if (operation.action.includes("actor_pose") && operation.pose && Object.keys(operation.pose).some(key=>!["offsetX","offsetY","offsetZ","rotationYOffset","rotationX","rotationZ"].includes(key))) throw semanticError("物体帧只支持整体偏移和旋转。");
+  }
   const postureFields = operation.action === "update_motion_action" ? operation.patch : operation.options;
   if (postureFields && ["posture","seatHeight","gesture","joints","transitionSeconds"].some(key=>Object.hasOwn(postureFields,key))) {
     if(blockingActor?.locked) throw semanticError("Actor is locked: "+blockingActor.id);
@@ -579,7 +588,7 @@ function validateOperationSemantics(project, operation) {
 
 function explicitNewEntityIDs(operation) {
   const ids = [];
-  if (["add_actor", "add_camera_setup", "add_shot", "add_blockout_group", "add_blockout_object", "add_blockout_primitive", "set_visual_environment_asset", "add_visual_environment_group"].includes(operation.action) && typeof operation.id === "string") ids.push(operation.id);
+  if (["add_movable_object", "add_actor", "add_camera_setup", "add_shot", "add_blockout_group", "add_blockout_object", "add_blockout_primitive", "set_visual_environment_asset", "add_visual_environment_group"].includes(operation.action) && typeof operation.id === "string") ids.push(operation.id);
   const include = (value) => {
     if (typeof value === "string") ids.push(value);
   };

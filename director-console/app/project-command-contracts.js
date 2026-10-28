@@ -482,6 +482,14 @@ const definitions = [
   operation("set_actor_pose_interpolation", "actors", "Set actor pose transition", "Set interpolation for the actor's pose frames. The interval between frames is the transition duration; scene and movement timing remain authored.", {
     actorID:idReference("Actor."),interpolation:{type:"string",enum:actorPoseInterpolations},
   },["actorID","interpolation"]),
+  operation("add_movable_object", "actors", "Add movable object", "Create an independent compound object. +Z is front, Y up, meters; primitive transforms are local to its anchor. Reuse actor movement and frame operations with this object's ID. No skeletal animation.", {
+    id:newID(), name:text("Object name."), description:text("Object description.",8000), position:vector3(),
+    primitives:{type:"array",maxItems:200,items:blockoutPrimitive()},
+  }, ["name","primitives"], {id:"object-boat-01",name:"小船",primitives:[{kind:"box",size:{x:1,y:0.4,z:2},position:{x:0,y:0.2,z:0},color:"#986944"}]}),
+  operation("update_movable_object", "actors", "Update object shape", "Update the existing object's shape/name. Preserve its ID, authored motion, frames, world transform and Codex conversation. Read current project and target ID before editing.", {
+    id:idReference("Existing movable object."),
+    patch:object({name:text("Object name."),description:text("Object description.",8000),primitives:{type:"array",minItems:1,maxItems:200,items:blockoutPrimitive()}},[],{minProperties:1}),
+  }, ["id","patch"]),
   operation("add_actor", "actors", "Add actor", "Add one Desktop actor at a world transform.", {
     id: newID(),
     position: vector3(),

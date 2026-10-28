@@ -41,6 +41,7 @@ import {
   worldUnitsPerScreenPixel,
 } from "./camera-viewport-navigation.js";
 
+import { movableObjectBounds } from "./movable-object.js";
 import { createBlockoutGeometry } from "./blockout-geometry.js";
 import { CameraDepthOfFieldRenderer } from "./camera-depth-of-field.js";
 import { focusPlaneGroundIntersection } from "./camera-focus-plane.js";
@@ -1146,6 +1147,7 @@ export class DirectorRenderer {
         group.userData.characterAssetID !== actor.characterAssetID
         || group.userData.clothingColorIndex !== actor.clothingColorIndex
         || group.userData.blockingColor !== actor.blockingColor
+        || group.userData.objectShape !== JSON.stringify(actor.movableObject?.primitives)
       )) {
         this.destroyActor(group);
         this.actors.delete(actor.id);
@@ -1625,7 +1627,18 @@ export class DirectorRenderer {
     group.name = 'Actor-' + actor.id;
     Object.assign(group.userData, { actorID: actor.id, characterAssetID: actor.characterAssetID,
       clothingColorIndex: actor.clothingColorIndex, blockingColor: actor.blockingColor, locked: actor.locked });
-    const model = createBlockingFigure(actorColor(actor));
+    group.userData.objectShape = JSON.stringify(actor.movableObject?.primitives);
+    const model = actor.movableObject ? new THREE.Group() : createBlockingFigure(actorColor(actor));
+    if (actor.movableObject) {
+      for (const part of actor.movableObject.primitives) {
+        const mesh = new THREE.Mesh(createBlockoutGeometry(part.kind), new THREE.MeshStandardMaterial({color:part.color,roughness:0.8,opacity:part.opacity,transparent:part.opacity<1,side:part.kind==='plane'?THREE.DoubleSide:THREE.FrontSide}));
+        mesh.position.set(part.position.x,part.position.y,part.position.z);
+        mesh.rotation.set(part.rotation.x,part.rotation.y,part.rotation.z);
+        mesh.scale.set(part.size.x,part.size.y,part.size.z);
+        mesh.visible=part.visible;
+        mesh.castShadow=true;mesh.receiveShadow=true;model.add(mesh);
+      }
+    }
     group.add(model);
     group.userData.characterModel = model;
     group.traverse(object => { object.userData.actorID = actor.id; });
@@ -1660,7 +1673,12 @@ export class DirectorRenderer {
     this.applyAnimation(group, actor, pose);
   }
 
-  applyAnimation(group, actor, pose) { applyBlockingFigurePose(group.userData.characterModel, { ...pose, rotationX: actor.rotationX, rotationZ: actor.rotationZ }); }
+  applyAnimation(group, actor, pose) {
+    if (actor.movableObject) {
+      const shapePose=pose.blockingPose || actor;
+      group.userData.characterModel.rotation.set(shapePose.rotationX || 0,0,shapePose.rotationZ || 0);
+    } else applyBlockingFigurePose(group.userData.characterModel, { ...pose, rotationX: actor.rotationX, rotationZ: actor.rotationZ });
+  }
 
   
 
@@ -1859,15 +1877,17 @@ export class DirectorRenderer {
       const actorIndex = this.project?.scene?.actors?.findIndex((candidate) => candidate.id === actorID) ?? -1;
       const actorGroup = this.actors.get(actorID);
       const base = actorGroup?.getWorldPosition(new THREE.Vector3()) || new THREE.Vector3();
+      const objectBounds=actor?.movableObject ? movableObjectBounds(actor.movableObject) : null;
+      const objectPoint=objectBounds ? actorGroup.userData.characterModel.worldToLocal(hit.point.clone()) : null;
       const actorHeight = THREE.MathUtils.clamp(
-        (hit.point.y - base.y) / (1.62 * Math.max(0.5, Number(actor?.scale || 1))),
+        objectBounds ? (objectPoint.y-objectBounds.min.y)/Math.max(.001,objectBounds.max.y-objectBounds.min.y) : (hit.point.y - base.y) / (1.62 * Math.max(0.5, Number(actor?.scale || 1))),
         0,
         1
       );
       return {
         focusDistance,
         mode: this.focusPickingMode,
-        label: `演员 ${String(Math.max(0, actorIndex) + 1).padStart(2, "0")} · ${focusBodyPartLabel(actorHeight)}`,
+        label: actor?.movableObject ? `${actor.movableObject.name} · ${Math.round(actorHeight*100)}% 高度` : `演员 ${String(Math.max(0, actorIndex) + 1).padStart(2, "0")} · ${focusBodyPartLabel(actorHeight)}`,
         target: { enabled: true, targetKind: "actor", targetActorID: actorID, actorHeight },
       };
     }
@@ -3386,6 +3406,16 @@ export class DirectorRenderer {
       hasBounds = true;
     };
     for (const actor of actors) {
+      if(actor.movableObject){
+        const node=this.actors.get(actor.id);node.updateWorldMatrix(true,true);
+        const objectBounds=visibleContentBounds([node]);
+        if(!objectBounds.isEmpty()){
+          bounds.union(objectBounds);hasBounds=true;
+          const radius=objectBounds.getBoundingSphere(new THREE.Sphere()).radius;
+          for(const action of actor.motionActions){const point=new THREE.Vector3(action.position.x,action.position.y,action.position.z);bounds.expandByPoint(point.clone().addScalar(radius));bounds.expandByPoint(point.clone().addScalar(-radius));}
+        }
+        continue;
+      }
       includePoint(actor.position, 1.8 * Math.max(0.1, Number(actor.scale || 1)));
       for (const action of actor.motionActions) includePoint(action.position, 1.8 * Math.max(0.1, Number(actor.scale || 1)));
     }

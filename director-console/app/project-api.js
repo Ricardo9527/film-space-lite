@@ -188,6 +188,13 @@ export class ProjectAPI {
     });
   }
 
+  async exportFrame(specification, pngBlob) {
+    const params = new URLSearchParams(specification);
+    return requestJSON(`/api/exports/frame?${params}`, {
+      method: "POST", headers: { "content-type": "image/png" }, body: pngBlob,
+    });
+  }
+
   async uploadExportFrame(exportID, frameIndex, pngBlob) {
     return requestJSON(`/api/exports/${encodeURIComponent(exportID)}/frames/${frameIndex}`, {
       method: "PUT",

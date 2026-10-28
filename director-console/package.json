@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/lite-*.test.mjs tests/camera-*.test.mjs tests/blockout-geometry.test.mjs tests/blockout-image.test.mjs tests/output-export.test.mjs tests/semantic-operation-queue.test.mjs tests/semantic-project-patch.test.mjs tests/project-session.test.mjs tests/ui-operation-history.test.mjs"
+    "test": "node --test tests/lite-*.test.mjs tests/camera-*.test.mjs tests/blockout-geometry.test.mjs tests/blockout-image.test.mjs tests/output-export.test.mjs tests/semantic-operation-queue.test.mjs tests/semantic-project-patch.test.mjs tests/project-session.test.mjs tests/ui-operation-history.test.mjs tests/shot-output-session.test.mjs tests/export-manager.test.mjs"
   }
 }

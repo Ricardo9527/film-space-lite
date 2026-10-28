@@ -374,6 +374,7 @@ function createProjectRepository(directory) {
 
 function cloneProjectForNewID(source, nextID, name) {
   const next = rewriteProjectReferences(structuredClone(source), source.id, nextID);
+  for (const actor of next.scene.actors) if(actor.movableObject) delete actor.movableObject.codex;
   next.id = nextID;
   next.name = name;
   // Only a current source result can carry its evidence across an asset namespace change.

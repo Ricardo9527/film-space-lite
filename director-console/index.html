@@ -64,6 +64,7 @@
               <div class="add-button-slot">
                 
                 <span class="primary-add-slot">
+                  <button id="addMovableObject" class="add-button" type="button">＋ 物体</button>
                   <button id="addActor" class="add-button" type="button"><span aria-hidden="true">＋</span> 演员</button>
                   <input id="blockoutModelInput" type="file" accept=".glb,model/gltf-binary" aria-label="导入环境模型 GLB" hidden />
                 </span>
@@ -71,7 +72,7 @@
               </div>
             </div>
             <div class="scene-sidebar-switch" role="group" aria-label="场景列表类型">
-              <button id="actorsSidebarMode" class="selected" type="button" aria-pressed="true">演员</button>
+              <button id="actorsSidebarMode" class="selected" type="button" aria-pressed="true">对象</button>
               <button id="cameraSetupsSidebarMode" type="button" aria-pressed="false">机位</button>
               <button id="shotsSidebarMode" type="button" aria-pressed="false">运镜</button>
               <button id="blockoutSidebarMode" type="button" aria-pressed="false">环境</button>
@@ -229,6 +230,7 @@
           <div id="cameraRecordActions" class="camera-record-actions" hidden>
             <button id="cancelCameraExport" class="secondary-button" type="button" hidden>取消</button>
             
+            <button id="exportCameraFrame" class="secondary-button camera-blend-button" type="button">导出当前帧</button>
             <button id="recordCameraOutput" class="camera-record-button" type="button">
               <span class="camera-record-dot" aria-hidden="true"></span>
               <span>生成 MP4</span>
@@ -305,6 +307,20 @@
           <button id="confirmDeleteProject" class="danger-button" type="button">删除项目</button>
         </footer>
       </div>
+    </dialog>
+
+    <dialog id="frameNameDialog" class="film-dialog" aria-labelledby="frameNameTitle">
+      <form id="frameNameForm" method="dialog" class="film-dialog-panel">
+        <header class="film-dialog-header"><h2 id="frameNameTitle">导出当前帧</h2></header>
+        <div class="new-project-fields">
+          <label for="frameNameInput">图片名称</label>
+          <input id="frameNameInput" type="text" maxlength="60" required autofocus />
+        </div>
+        <footer class="film-dialog-footer">
+          <button id="frameNameCancel" class="secondary-button" type="button">取消</button>
+          <button class="primary-button" type="submit" value="export">导出 PNG</button>
+        </footer>
+      </form>
     </dialog>
 
     <dialog id="projectSettingsDialog" class="film-dialog" aria-labelledby="projectSettingsTitle">
@@ -401,6 +417,31 @@
 
     
 
+    <dialog id="newMovableObjectDialog" class="film-dialog movable-object-dialog" aria-labelledby="newMovableObjectTitle" aria-describedby="newMovableObjectIntro">
+      <form id="newMovableObjectForm" class="film-dialog-panel">
+        <header class="film-dialog-header">
+          <h2 id="newMovableObjectTitle">新建物体</h2>
+          <p id="newMovableObjectIntro">描述外形，交给 Codex 制作。</p>
+        </header>
+        <div class="movable-object-fields">
+          <div class="field">
+            <label for="newMovableObjectName">物体名称</label>
+            <input id="newMovableObjectName" type="text" required maxlength="120" placeholder="例如：小木船" />
+          </div>
+          <div class="field">
+            <label for="newMovableObjectDescription">外形描述</label>
+            <textarea id="newMovableObjectDescription" required maxlength="8000" rows="5" aria-describedby="newMovableObjectHint" placeholder="例如：一艘长约 3 米的木船，蓝色船身，中间有一根桅杆和白色船帆。"></textarea>
+            <p id="newMovableObjectHint" class="movable-object-hint">写清形状、比例、颜色和尺寸，方便制作。</p>
+          </div>
+          <p class="movable-object-note">完成后可添加走位，也可在原 Codex 聊天继续修改。</p>
+          <p id="newMovableObjectError" role="alert"></p>
+        </div>
+        <footer class="film-dialog-footer">
+          <button id="cancelNewMovableObject" class="secondary-button" type="button">取消</button>
+          <button id="submitNewMovableObject" class="primary-button" type="submit">开始制作</button>
+        </footer>
+      </form>
+    </dialog>
     <dialog id="newProjectDialog" class="film-dialog" aria-labelledby="newProjectTitle">
       <form method="dialog" class="film-dialog-panel">
         <header class="film-dialog-header">

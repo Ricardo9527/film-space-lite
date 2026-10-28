@@ -38,3 +38,5 @@ UI 与 MCP 操作同一份 Lite 项目。旧 revision 必须重新读取后提�
 简单动作：使用 add_stay 的 gesture/joints/transitionSeconds 编排头、腰、同步髋膝；以明确姿态和节奏为准，不模拟精细人体运动。gesture=hold 保持上一姿态，kneel/crouch/sit/stand 仅重设腿部。先检查 actor.poseTrack 的 torsoPitch/headPitch 显式覆盖。完整字段通过 get_film_space_operation_schema 查询，更新通过 update_motion_action。
 
 移动面向：add_move.options / update_motion_action.patch 的 facingMode 可选 path/inherit/fixed。inherit 保持进入时基准面向；fixed 必须给 facingY 世界弧度角。例后退击飞 add_move options={speed:2,facingMode:"inherit"}。rotationYOffset 继续叠加；Move 的位置偏移沿路径，Hold 沿停留朝向。
+
+可移动物体：使用 add_movable_object 创建组合几何，update_movable_object(id,patch) 修改已有外形。绑定聊天必须始终读取指定项目和物体 ID，不以默认项目替代。外形修改只写 name/description/primitives，保留运动、关键帧、整体变换和聊天绑定；用户明确要求运动修改时复用演员运动操作。+Z 为物体正前方，原点为整体运动锚点。物体帧只使用整体偏移和旋转，不写人物关节或站坐动作。用一个主视角、必要时一个侧视角检查结果。

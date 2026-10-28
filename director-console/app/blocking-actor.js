@@ -1,3 +1,4 @@
+import { movableObjectTarget } from "./movable-object.js";
 import { legacyActorPose, blendActorPose, blockingPoseLandmarks, actionGestures, normalizeActionJoints } from "./actor-pose.js";
 import { distanceXYZ, normalizeAngle } from "./scene-model.js";
 
@@ -41,6 +42,7 @@ export function blockingHeadHeight(pose) {
 
 // Local XYZ tilt, then world Y facing, around the authored actor anchor.
 export function blockingTargetPosition(actor, sample, heightFraction = 1) {
+  if(actor.movableObject)return movableObjectTarget(actor,sample,heightFraction);
   const pose=sample.blockingPose || legacyActorPose(actor,sample);
   const head=blockingPoseLandmarks(pose).head,scale=heightFraction*actor.scale;
   const y=head.y*scale,z=head.z*scale;
