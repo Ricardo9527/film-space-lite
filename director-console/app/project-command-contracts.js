@@ -283,12 +283,15 @@ const actorPoseSchema = {...object(Object.fromEntries(Object.entries(actorPosePa
 const blockingPostureProperties = {
   gesture: {type:"string",enum:Object.keys(actionGestures),description:"MCP simple action preset. kneel/crouch/stand/sit set synchronized legs; hold preserves preceding action pose. Unspecified joints inherit the preceding action target. First gesture starts from standing. Plain Holds/Move retain existing stand/sit semantics. No separate left/right limbs."},
   joints: object(Object.fromEntries(Object.entries(actionJointParameters).map(([key,spec])=>[key,finiteNumber(`${spec.label}, radians. Local to parent: +headYaw turns to actor left (+X), +pitch bends forward/down. Existing actor pose frames explicitly override torsoPitch/headPitch.`,{minimum:spec.min,maximum:spec.max})]))),
-  transitionSeconds: finiteNumber("Time to reach the action pose, within Hold duration (clamped to duration); remainder holds target. Default .25; zero is immediate. Facing turn retains existing timing.",{minimum:0,maximum:3600}),
+  transitionSeconds: finiteNumber("Time to reach the action pose, within Hold duration (clamped to duration); remainder holds target. Default .25; zero is immediate. Facing duration is controlled separately by turnSeconds.",{minimum:0,maximum:3600}),
   posture: { type: "string", enum: ["stand", "sit"], description: "Desktop abstract actor Hold posture. Stand and sit share the foot-ground path anchor; seated hips extend behind it. Existing time-based blending keeps feet anchored during sit/stand. Omitted defaults to stand; not valid for Move or ordinary actors." },
   seatHeight: finiteNumber("Seat surface height above the path point in unscaled actor-local meters; abstract Hold only. Defaults to 0.45.", { minimum: 0, maximum: 2 }),
 };
 
+const turnSecondsProperty = () => finiteNumber("Entry facing transition in seconds. Default .25; zero is immediate; capped at this action duration. Runs during movement/Stay without extending it. Keep-facing has no turn; pose yaw offsets and pose transitionSeconds remain independent.", {minimum:0,maximum:3600});
+
 const motionPatch = () => object({
+  turnSeconds: turnSecondsProperty(),
   ...blockingPostureProperties,
   actionID: catalogActionID("Action catalog ID valid for the target action kind."),
   speed: finiteNumber("Move speed in meters per second.", { minimum: 0.05, maximum: 20 }),
@@ -580,6 +583,7 @@ const definitions = [
       ),
       speed: finiteNumber("Move speed in meters per second.", { minimum: 0.05, maximum: 20 }),
       facingMode: {type:"string", enum:["path","inherit","fixed"], description:"Follow path (default), keep entering base facing, or use fixed facingY."},
+      turnSeconds: turnSecondsProperty(),
       facingY: finiteNumber("World-Y angle in radians; required for fixed facing.", { minimum: -Math.PI * 2, maximum: Math.PI * 2 }),
       locomotionGait: { type: "string", enum: ["walk"] },
       
@@ -600,6 +604,7 @@ const definitions = [
       ),
       duration: finiteNumber("Duration in seconds.", { minimum: 0, maximum: 3600 }),
       loopBehavior: { type: "string", enum: ["loop"] },
+      turnSeconds: turnSecondsProperty(),
       facingY: finiteNumber("Optional world-Y facing angle in radians.", { minimum: -Math.PI * 2, maximum: Math.PI * 2 }),
       
     }),
@@ -621,6 +626,7 @@ const definitions = [
         ),
         duration: finiteNumber("Duration in seconds.", { minimum: 0, maximum: 3600 }),
         loopBehavior: { type: "string", enum: ["loop"] },
+        turnSeconds: turnSecondsProperty(),
         facingY: finiteNumber("Optional world-Y facing angle in radians.", { minimum: -Math.PI * 2, maximum: Math.PI * 2 }),
         
       }),
@@ -806,6 +812,19 @@ const definitions = [
     shotID: "shot-establishing-01",
     keyframeID: "camera-key-start-01",
     aim: { mode: "look-at", targetKind: "environment", environmentID: "environment-statue-01", localPosition: { x: 0, y: 1, z: 0 } },
+  }),
+  operation("update_camera_keyframe_bodycam", "cameras", "Update camera Bodycam", "Bind the current world composition to a human torso; bypass Follow/Aim while enabled. Null inherits. Chest placement explicitly resets a front-mounted rig facing back at the wearer. Subsequent camera pose edits use world coordinates.", {
+    shotID: idReference("Owning Shot."),
+    keyframeID: idReference("Camera keyframe to update."),
+    bodycam: { anyOf: [
+      object({ enabled: { const: false } }, ["enabled"]),
+      object({ enabled: { const: true }, targetActorID: idReference("Human actor to bind.") }, ["enabled", "targetActorID"]),
+      { type: "null" },
+    ] },
+    placement: { type: "string", enum: ["preserve", "chest"], default: "preserve" },
+  }, ["shotID", "keyframeID", "bodycam"], {
+    shotID: "shot-establishing-01", keyframeID: "camera-key-start-01",
+    bodycam: { enabled: true, targetActorID: "actor-lead-01" }, placement: "chest",
   }),
   operation("update_camera_keyframe_follow", "cameras", "Update camera Follow", "Set or clear one reached-state position Follow constraint.", {
     shotID: idReference("Owning Shot."),

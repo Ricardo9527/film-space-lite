@@ -57,6 +57,16 @@ export function normalizeCameraFollow(input = {}) {
   };
 }
 
+export function normalizeCameraBodycam(input = {}) {
+  const pose = normalizeCameraPose({ position: input?.localPosition, quaternion: input?.localQuaternion });
+  return {
+    enabled: input?.enabled === true,
+    targetActorID: cleanEntityID(input?.targetActorID),
+    localPosition: pose?.position || { x: 0, y: 0.35, z: 1.5 },
+    localQuaternion: pose?.quaternion || { x: 0, y: 0, z: 0, w: 1 },
+  };
+}
+
 export function createCameraTrack(options = {}) {
   const keyframes = Array.isArray(options.keyframes)
     ? options.keyframes.map((keyframe, index) => normalizeCameraKeyframe(keyframe, index)).filter(Boolean)
@@ -341,6 +351,9 @@ export function recordCameraKeyframe(track, pose, timeInput, frameRateInput = 30
     existing || sampleCameraTrack(normalized, time)
   );
   const keyframe = {
+    ...(Object.hasOwn(pose || {}, "bodycam") || Object.hasOwn(existing || {}, "bodycam")
+      ? { bodycam: (pose.bodycam ?? existing?.bodycam) == null ? null : normalizeCameraBodycam(pose.bodycam ?? existing?.bodycam) }
+      : {}),
     id: existing?.id || createCameraKeyframeID(),
     time: existing?.time ?? time,
     ...normalizedPose,
@@ -379,7 +392,9 @@ export function updateCameraKeyframe(track, keyframeID, pose) {
   return createCameraTrack({
     ...normalized,
     keyframes: normalized.keyframes.map((keyframe) => keyframe.id === keyframeID
-      ? { ...keyframe, ...normalizedPose }
+      ? { ...keyframe, ...normalizedPose,
+          ...(Object.hasOwn(pose, "bodycam") ? { bodycam: pose.bodycam == null ? null : normalizeCameraBodycam(pose.bodycam) } : {}),
+        }
       : keyframe),
   });
 }
@@ -635,6 +650,7 @@ function normalizeCameraKeyframe(input, index) {
   const pose = normalizeCameraPose(input);
   if (!pose) return null;
   return {
+    ...(Object.hasOwn(input || {}, "bodycam") ? { bodycam: input.bodycam == null ? null : normalizeCameraBodycam(input.bodycam) } : {}),
     id: typeof input?.id === "string" && input.id ? input.id : `camera-key-${index}`,
     time: clampFinite(input?.time, 0, 3600, index === 0 ? 0 : defaultCameraTrackDuration),
     ...pose,

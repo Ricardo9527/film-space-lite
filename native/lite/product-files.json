@@ -9,6 +9,7 @@
   "director-console/app/blockout-image.js",
   "director-console/app/camera-aim.js",
   "director-console/app/camera-authoring.js",
+  "director-console/app/camera-bodycam.js",
   "director-console/app/camera-clipping.js",
   "director-console/app/camera-composition.js",
   "director-console/app/camera-depth-of-field-model.js",

@@ -1,3 +1,4 @@
+import { updateShotCameraKeyframeBodycam } from "./project-model.js";
 import { addMovableObject, updateMovableObject, recordActorPoseKeyframe, updateActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
 import { isBlockingActor } from "./blocking-actor.js";
 import { setProjectDefaultAspectRatio } from "./project-model.js";
@@ -233,6 +234,9 @@ function applyOne(project, operation) {
         requiredID(operation, "keyframeID"),
         operation.aim
       );
+    case "update_camera_keyframe_bodycam":
+      return updateShotCameraKeyframeBodycam(project, requiredID(operation, "shotID"),
+        requiredID(operation, "keyframeID"), operation.bodycam, operation.placement);
     case "update_camera_keyframe_follow":
       return updateShotCameraKeyframeFollow(
         project,

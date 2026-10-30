@@ -1,3 +1,7 @@
+import { bodycamActorFrame, captureBodycamPose, effectiveCameraBodycam } from "./camera-bodycam.js";
+import { sampleShotCamera } from "./camera-aim.js";
+import { removeCameraHandheld } from "./camera-handheld.js";
+import { sampleCameraTrack, normalizeCameraBodycam, snapCameraTime } from "./camera-track.js";
 import { createActorPoseTrack, recordActorPose, moveActorPoseFrames, migrateLegacyActorPoseTrack } from "./actor-pose.js";
 import { output1080Resolution } from "./camera-composition.js";
 import { blockingCharacterID, isBlockingActor, blockingMotionActions, blockingPostureFields, moveFacingFields, compileBlockingPlayback, sampleBlockingPhase } from "./blocking-actor.js";
@@ -23,7 +27,7 @@ import {
 
 export { desktopActions } from "./action-catalog.js";
 
-export const desktopProjectSchemaVersion = 72;
+export const desktopProjectSchemaVersion = 74;
 
 // Keep the index and color values aligned with HumanFigureFactory on Phone Lite.
 export const clothingColors = [
@@ -587,6 +591,7 @@ export function updateMotionAction(project, actorID, actionID, patch = {}) {
     const next = { ...action };
     if (Object.hasOwn(patch,"speed")) next.speed = clampFinite(patch.speed,minimumMoveSpeed,20,action.speed);
     if (Object.hasOwn(patch,"duration") && action.kind === "hold" && index > 0) next.duration = clampFinite(patch.duration,0,3600,action.duration);
+    if (Object.hasOwn(patch,"turnSeconds")) next.turnSeconds = patch.turnSeconds;
     if (Object.hasOwn(patch,"facingMode")) next.facingMode = patch.facingMode;
     if (Object.hasOwn(patch,"facingY")) next.facingY = Number.isFinite(patch.facingY) ? normalizeAngle(patch.facingY) : null;
     if (Object.hasOwn(patch,"position")) next.position = sanitizeVector(patch.position,action.position);
@@ -1674,7 +1679,7 @@ export function recordShotCameraKeyframe(project, shotID, pose, time, frameRate 
     ...shot,
     camera: {
       ...shot.camera,
-      track: recordCameraKeyframe(shot.camera.track, pose, time, frameRate),
+      track: recordCameraKeyframe(shot.camera.track, bodycamAuthoredPose(project, shot, pose, snapCameraTime(time, frameRate)), time, frameRate),
     },
   }));
 }
@@ -1684,9 +1689,43 @@ export function updateShotCameraKeyframe(project, shotID, keyframeID, pose) {
     ...shot,
     camera: {
       ...shot.camera,
-      track: updateCameraKeyframe(shot.camera.track, keyframeID, pose),
+      track: updateCameraKeyframe(shot.camera.track, keyframeID, bodycamAuthoredPose(project, shot, pose, shot.camera.track.keyframes.find((key) => key.id === keyframeID)?.time)),
     },
   }));
+}
+
+// Pose editing always accepts world-space composition. Binding stores only the
+// local installation, leaving the ordinary path available when Bodycam is off.
+function bodycamAuthoredPose(project, shot, pose, time) {
+  const binding = effectiveCameraBodycam(shot.camera.track, time);
+  if (!binding.enabled || time == null) return pose;
+  const frame = bodycamActorFrame(project, binding.targetActorID, time);
+  if (!frame) throw new Error("Bodycam 绑定人物已不存在，请重新选择人物或关闭绑定。");
+  const base = sampleCameraTrack(shot.camera.track, time);
+  return { ...pose, position: base.position, quaternion: base.quaternion,
+    bodycam: captureBodycamPose(frame, pose, binding.targetActorID) };
+}
+
+export function updateShotCameraKeyframeBodycam(project, shotID, keyframeID, input, placement = "preserve") {
+  return updateShot(project, shotID, (shot) => {
+    const key = shot.camera.track.keyframes.find((candidate) => candidate.id === keyframeID);
+    if (!key) throw new Error("Camera keyframe does not exist.");
+    let bodycam = input == null ? null : normalizeCameraBodycam(input);
+    if (bodycam?.enabled) {
+      const frame = bodycamActorFrame(project, bodycam.targetActorID, key.time);
+      if (!frame) throw new Error("Bodycam 需要有效的人物目标。");
+      if (placement === "chest") {
+        bodycam = normalizeCameraBodycam({ enabled: true, targetActorID: bodycam.targetActorID });
+      } else if (!input.localPosition || !input.localQuaternion) {
+        const visible = removeCameraHandheld(shot, sampleShotCamera(project, shot, key.time), key.time);
+        bodycam = captureBodycamPose(frame, visible, bodycam.targetActorID);
+      }
+    }
+    return { ...shot, camera: { ...shot.camera, track: createCameraTrack({
+      ...shot.camera.track,
+      keyframes: shot.camera.track.keyframes.map((candidate) => candidate.id === keyframeID ? { ...candidate, bodycam } : candidate),
+    }) } };
+  });
 }
 
 export function updateShotCameraKeyframeAim(project, shotID, keyframeID, aim) {
@@ -1858,7 +1897,7 @@ export function cloneProject(project) {
 
 export function createAnchorAction(position){return {id:createID(),kind:"hold",actionID:"idle",position:sanitizeVector(position,{x:0,y:0,z:0}),speed:defaultMoveSpeed,duration:0,facingY:null,locomotionGait:"walk",loopBehavior:"loop",...blockingPostureFields({kind:"hold"})};}
 
-function createStayAction(position,options={}){return {id:createID(),kind:"hold",actionID:"idle",position:{...position},speed:defaultMoveSpeed,duration:clampFinite(options.duration,0,3600,1),facingY:Number.isFinite(options.facingY)?normalizeAngle(options.facingY):null,locomotionGait:"walk",loopBehavior:"loop",...blockingPostureFields({...options,kind:"hold"})};}
+function createStayAction(position,options={}){return {id:createID(),kind:"hold",actionID:"idle",position:{...position},speed:defaultMoveSpeed,duration:clampFinite(options.duration,0,3600,1),facingY:Number.isFinite(options.facingY)?normalizeAngle(options.facingY):null,locomotionGait:"walk",loopBehavior:"loop",...blockingPostureFields({...options,kind:"hold"}),...moveFacingFields({...options,kind:"hold"})};}
 
 function normalizeActor(input, index, usedActorIDs, sourceVersion) {
   if ((sourceVersion ?? 0) < 66) input = {...input,poseTrack:migrateLegacyActorPoseTrack(input.poseTrack)};

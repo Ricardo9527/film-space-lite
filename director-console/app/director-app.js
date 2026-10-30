@@ -1,3 +1,5 @@
+import { effectiveCameraBodycam, isBodycamActor } from "./camera-bodycam.js";
+import { updateShotCameraKeyframeBodycam } from "./project-model.js";
 import {startUpdateUI} from "./update-notice.js";
 import { actorFramePose, actorPoseParameters, actorPoseKeyframeAtTime, recordActorPose, moveActorPoseFrames } from "./actor-pose.js";
 import { addMovableObject, recordActorPoseKeyframe, moveActorPoseKeyframes, deleteActorPoseKeyframes, setActorPoseInterpolation } from "./project-model.js";
@@ -480,6 +482,8 @@ const directorRenderer = new DirectorRenderer({
     );
     project = updateShotCameraKeyframe(cameraKeyframeBaseProject, shot.id, keyframeID, {
       ...keyframe,
+      ...(effectiveCameraBodycam(source.camera.track, keyframe.time).enabled
+        ? removeCameraHandheld(source, sampleShotCamera(cameraKeyframeBaseProject, source, keyframe.time), keyframe.time) : {}),
       position: authoredPosition,
     });
     renderInspector();
@@ -494,6 +498,8 @@ const directorRenderer = new DirectorRenderer({
     const authoredPosition = authoredCameraPositionFromGuide(base, shot, keyframe, position);
     project = projectState.commit(updateShotCameraKeyframe(base, shot.id, keyframeID, {
       ...keyframe,
+      ...(effectiveCameraBodycam(shot.camera.track, keyframe.time).enabled
+        ? removeCameraHandheld(shot, sampleShotCamera(base, shot, keyframe.time), keyframe.time) : {}),
       position: authoredPosition,
     }));
     cameraKeyframeSelection.activeID = keyframeID;
@@ -676,7 +682,7 @@ const directorRenderer = new DirectorRenderer({
     );
     cameraEditSession.stageShot(shot.id, stagedPose, staged?.project || null);
     const evaluated = staged?.sampledPose || stagedPose;
-    if (aimOrientationLocked(evaluated) || evaluated?.followEvaluation?.enabled) {
+    if (aimOrientationLocked(evaluated) || evaluated?.followEvaluation?.enabled || evaluated?.bodycamEvaluation?.enabled) {
       directorRenderer.setCameraTrackPose(evaluated, {
         rotationLocked: aimOrientationLocked(evaluated),
       });
@@ -3784,6 +3790,7 @@ function authoredCameraPoseFromVisible(
 ) {
   if (!visiblePose || !shot?.camera?.track) return visiblePose;
   const unmodifiedPose = removeCameraHandheld(shot, visiblePose, elapsed);
+  if (effectiveCameraBodycam(shot.camera.track, elapsed).enabled) return unmodifiedPose;
   const base = sampleCameraTrack(shot.camera.track, elapsed);
   const aim = effectiveCameraAim(shot.camera.track, elapsed);
   const sampled = base
@@ -4033,7 +4040,7 @@ function canEditCamera() {
 }
 
 function canEditCameraOrbit() {
-  if (appUpdateLocked) return false;
+  if (appUpdateLocked || effectiveCameraBodycam(findShot(project)?.camera?.track, playback.elapsed).enabled) return false;
   return viewportMode === viewportModes.edit
     && playback.status !== "playing"
     && !isExporting()
@@ -5293,7 +5300,8 @@ function updateCameraWorkspaceTransport() {
   const sampledCamera = shot
     ? sampleShotCamera(project, shot, playback.elapsed, currentProjectSamples())
     : null;
-  const constraintWarning = sampledCamera?.followEvaluation?.warning
+  const constraintWarning = sampledCamera?.bodycamEvaluation?.warning
+    || sampledCamera?.followEvaluation?.warning
     || sampledCamera?.aimEvaluation?.warning
     || null;
   if (!cameraProgressScrubbing) elements.cameraProgress.value = String(playback.elapsed);
@@ -7431,6 +7439,15 @@ function renderMotionInspector(actor, target = elements.inspectorContent) {
       );
     });
   }
+  for (const input of elements.inspectorContent.querySelectorAll("[data-turn-seconds]")) {
+    wireInputNumberScrub(input, { precision: 2 });
+    input.addEventListener("change", () => {
+      if (!input.reportValidity()) return;
+      const actionID = input.dataset.turnSeconds;
+      commitProject(current => updateMotionAction(current, actor.id, actionID, { turnSeconds: Number(input.value) }),
+        "进入时转向时长已更新", { preserveInspectionFor: { actorID: actor.id, actionID } });
+    });
+  }
   for (const input of elements.inspectorContent.querySelectorAll("[data-facing-angle]")) {
     const actionID = input.dataset.facingAngle;
     wireInputNumberScrub(input, { precision: 1 });
@@ -7512,18 +7529,25 @@ function renderMotionRows(actor) {
     const hasNextMove = actor.motionActions.slice(index + 1).some(candidate => candidate.kind === "move");
     const id = escapeHTML(action.id);
     return `<div class="facing-editor">
-      <label class="facing-angle-row">面向角度
+      <div class="motion-fields">
+      <label class="motion-field"><span>面向</span>
         <span class="input-with-unit motion-number facing-angle-field ${mode !== "fixed" ? "inherited" : ""}">
           <input data-facing-angle="${id}" type="number" step="any" data-scrub-step="1" value="${degrees}" aria-label="${moving ? "移动" : "停留"}面向角度（度）" title="输入或拖动，直接指定面向角度" />
           <span>°</span>
         </span>
-        <span class="facing-mode-label">${mode === "fixed" ? "指定" : mode === "inherit" ? "保持" : "跟随"}</span>
       </label>
+      <label class="motion-field"><span>转向</span>
+        <span class="input-with-unit motion-number facing-angle-field">
+          <input data-turn-seconds="${id}" type="number" min="0" max="3600" step="any" data-scrub-step="0.05" required value="${action.turnSeconds ?? 0.25}" aria-label="${moving ? "移动" : "停留"}进入时转向时长（秒）" ${mode === "inherit" ? "disabled" : ""} />
+          <span>s</span>
+        </span>
+      </label>
+      </div>
       <div class="facing-command-row">
         <button class="compact-button facing-mode-button ${mode === "inherit" ? "active" : ""}" type="button" data-action-id="${id}" data-facing-mode="inherit" aria-pressed="${mode === "inherit"}" title="保持进入这段${moving ? "移动" : "停留"}时的面向">保持面向</button>
         ${moving
-          ? `<button class="compact-button facing-mode-button ${mode === "path" ? "active" : ""}" type="button" data-action-id="${id}" data-facing-mode="path" aria-pressed="${mode === "path"}" title="持续跟随这段移动的方向，路径变化时同步更新">跟随移动方向</button>`
-          : `<button class="compact-button" type="button" data-face-next-action="${id}" ${hasNextMove ? "" : "disabled"} title="${hasNextMove ? "按下一段移动的方向设置角度；修改路径后可再次点击对准" : "后面没有移动段"}">朝向移动方向</button>`}
+          ? `<button class="compact-button facing-mode-button ${mode === "path" ? "active" : ""}" type="button" data-action-id="${id}" data-facing-mode="path" aria-pressed="${mode === "path"}" title="持续跟随这段移动的方向，路径变化时同步更新">跟随移动</button>`
+          : `<button class="compact-button" type="button" data-face-next-action="${id}" ${hasNextMove ? "" : "disabled"} title="${hasNextMove ? "按下一段移动的方向设置角度；修改路径后可再次点击对准" : "后面没有移动段"}">朝向移动</button>`}
       </div>
     </div>`;
   };
@@ -7550,16 +7574,15 @@ function renderMotionRows(actor) {
         </div>
         ${detail ? `<p class="motion-detail">${detail}</p>` : ""}
         ${""}
-        <div class="motion-control motion-timing-control">
-          <span class="input-with-unit motion-number">
+        <div class="motion-fields motion-fields-top">
+          <label class="motion-field"><span>速度</span><span class="input-with-unit motion-number motion-speed-field">
             <input data-action-value="speed" data-action-id="${escapeHTML(action.id)}" type="number" min="0.05" max="20" step="any" data-scrub-step="0.05" value="${action.speed.toFixed(2)}" aria-label="移动速度（米每秒）" />
             <span>m/s</span>
-          </span>
-          <span class="input-with-unit motion-number">
+          </span></label>
+          <label class="motion-field"><span>时长</span><span class="input-with-unit motion-number">
             <input data-move-duration="${escapeHTML(action.id)}" type="number" min="0.05" max="3600" step="any" data-scrub-step="0.05" value="${timing.totalDuration.toFixed(2)}" aria-label="这段移动的时长（秒）" />
             <span>s</span>
-          </span>
-          ${""}
+          </span></label>
         </div>
         ${renderFacingEditor(action, index)}
       </article>`;
@@ -7591,26 +7614,22 @@ function renderMotionRows(actor) {
             <button class="motion-delete" type="button" data-delete-action="${escapeHTML(action.id)}" title="删除动作" aria-label="删除动作">×</button>
           </span>
         </div>
-        ${actor.movableObject?"":`<label class="motion-control blocking-posture-control">动作
-          <select data-action-value="posture" data-action-id="${escapeHTML(action.id)}" aria-label="停留动作">
-            ${action.gesture || action.joints ? '<option value="custom" selected disabled>自定义动作</option>' : ""}
-            <option value="stand" ${!action.gesture && !action.joints && action.posture !== "sit" ? "selected" : ""}>站立</option>
-            <option value="sit" ${!action.gesture && !action.joints && action.posture === "sit" ? "selected" : ""}>坐下</option>
-          </select>
-        </label>
-        ${action.posture === "sit" ? `<label class="motion-control blocking-posture-control">座位高度
-          <span class="input-with-unit motion-number">
+        <div class="motion-fields motion-fields-top">
+          ${actor.movableObject ? "" : `<label class="motion-field"><span>动作</span>
+            <select data-action-value="posture" data-action-id="${escapeHTML(action.id)}" aria-label="停留动作">
+              ${action.gesture || action.joints ? '<option value="custom" selected disabled>自定义动作</option>' : ""}
+              <option value="stand" ${!action.gesture && !action.joints && action.posture !== "sit" ? "selected" : ""}>站立</option>
+              <option value="sit" ${!action.gesture && !action.joints && action.posture === "sit" ? "selected" : ""}>坐下</option>
+            </select>
+          </label>`}
+          <label class="motion-field"><span>时长</span><span class="input-with-unit motion-number">
+            <input data-action-value="duration" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="3600" step="any" data-scrub-step="0.1" value="${action.duration.toFixed(2)}" aria-label="停留时长（秒）" />
+            <span>s</span>
+          </span></label>
+          ${!actor.movableObject && action.posture === "sit" ? `<label class="motion-field"><span>座高</span><span class="input-with-unit motion-number">
             <input data-action-value="seatHeight" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="2" step="any" data-scrub-step="0.01" value="${action.seatHeight.toFixed(2)}" aria-label="座位高度（米，人物缩放前）" />
             <span>m</span>
-          </span>
-        </label>` : ""}`}
-        <div class="motion-control motion-timing-control">
-          ${""}
-          <span class="input-with-unit motion-number">
-            <input data-action-value="duration" data-action-id="${escapeHTML(action.id)}" type="number" min="0" max="3600" step="any" data-scrub-step="0.1" value="${action.duration.toFixed(2)}" aria-label="${"停留"}时长（秒）" />
-            <span>s</span>
-          </span>
-          ${""}
+          </span></label>` : ""}
         </div>
         ${renderFacingEditor(action, index)}
         ${""}
@@ -8645,6 +8664,10 @@ function renderCameraInspector() {
     : liveAimTargetIndex >= 0
       ? `演员 ${String(liveAimTargetIndex + 1).padStart(2, "0")}`
       : "目标已删除";
+  const selectedBodycam = effectiveCameraBodycam(track, selectedKeyframe?.time ?? playback.elapsed);
+  const liveBodycam = effectiveCameraBodycam(track, playback.elapsed);
+  const bodycamActors = project.scene.actors.filter(isBodycamActor);
+  const bodycamTargetExists = bodycamActors.some((actor) => actor.id === selectedBodycam.targetActorID);
   const selectedFollowInherited = selectedKeyframeIndex > 0 && selectedKeyframe?.follow == null;
   const selectedFollowState = selectedKeyframe
     ? effectiveCameraFollowState(track, selectedKeyframe.time)
@@ -8716,7 +8739,9 @@ function renderCameraInspector() {
   const editorState = directorRenderer.shotCameraEditorState();
   const sceneKeyframeActive = !cameraModeActive && !shotViewActive && Boolean(selectedKeyframe);
   const currentPose = sceneKeyframeActive
-    ? selectedKeyframe
+    ? selectedBodycam.enabled
+      ? removeCameraHandheld(shot, sampleShotCamera(project, shot, selectedKeyframe.time), selectedKeyframe.time)
+      : selectedKeyframe
     : cameraModeActive || shotViewActive
     ? editorState.pose
     : directorRenderer.captureSceneCameraPose();
@@ -8733,7 +8758,7 @@ function renderCameraInspector() {
     Math.min(cameraApertureMaximum, Number(currentPose.aperture) || 2.8)
   );
   const positionEditable = canEdit && (shotViewActive || sceneKeyframeActive);
-  const pitchYawEditable = shotViewActive && canEdit && liveAim.mode !== "look-at" && !liveAimTransition;
+  const pitchYawEditable = shotViewActive && canEdit && (liveBodycam.enabled || (liveAim.mode !== "look-at" && !liveAimTransition));
   const rollEditable = shotViewActive && canEdit;
   const lensEditable = canEdit && (shotViewActive || sceneKeyframeActive);
   const focusDistanceEditable = lensEditable && !liveFocusTracking.enabled;
@@ -8859,6 +8884,7 @@ function renderCameraInspector() {
     <section class="inspector-section camera-inspector-section">
       <h2 class="section-title">对准</h2>
         <div class="camera-constraints-editor">
+          <fieldset class="camera-bodycam-overrides" ${selectedBodycam.enabled ? "disabled" : ""}>
           ${selectedKeyframe ? `<div class="camera-constraint-row ${selectedFollow.enabled ? "active follow" : ""}">
             <div class="camera-constraint-heading">
               <div><strong>位置跟随</strong><span>${selectedFollowInherited ? "沿用上一关键帧" : "从当前关键帧生效"}</span></div>
@@ -8915,8 +8941,8 @@ function renderCameraInspector() {
                 </label>
                 <label><span>锁定响应</span>
                   <select id="cameraAimTracking" ${canEdit ? "" : "disabled"}>
-                    <option value="smooth" ${selectedAim.trackingResponse > 0 ? "selected" : ""}>连续平滑（推荐）</option>
-                    <option value="exact" ${selectedAim.trackingResponse <= 0 ? "selected" : ""}>精确锁定</option>
+                    <option value="smooth" ${selectedAim.trackingResponse > 0 ? "selected" : ""}>连续平滑</option>
+                    <option value="exact" ${selectedAim.trackingResponse <= 0 ? "selected" : ""}>精确锁定（推荐）</option>
                   </select>
                 </label>
               </div>
@@ -8935,12 +8961,30 @@ function renderCameraInspector() {
               ? "转向进行中"
               : liveAim.mode === "look-at" ? `正在锁定${liveAimTargetLabel}` : "当前播放头没有关键帧"}</p>
           </div>`}
+          </fieldset>
+          <div class="camera-constraint-row ${selectedBodycam.enabled ? "active follow" : ""}">
+            <div class="camera-constraint-heading">
+              <div><strong>Bodycam 身体绑定</strong><span>${selectedKeyframe ? "开启时保持当前构图" : "记录关键帧后可设置"}</span></div>
+              <button id="cameraBodycamToggle" class="switch-button" type="button" role="switch" aria-checked="${selectedBodycam.enabled}" aria-label="Bodycam 身体绑定" ${canEdit && selectedKeyframe && (selectedBodycam.enabled || bodycamActors.length) ? "" : "disabled"}><span aria-hidden="true"></span></button>
+            </div>
+            ${selectedBodycam.enabled ? `
+              <label class="camera-constraint-target"><span>绑定人物</span>
+                <select id="cameraBodycamTarget" aria-label="Bodycam 绑定人物" ${canEdit && selectedKeyframe && bodycamActors.length ? "" : "disabled"}>
+                  ${!bodycamTargetExists ? `<option selected value="${escapeHTML(selectedBodycam.targetActorID || "")}">目标已删除</option>` : ""}
+                  ${bodycamActors.map((actor) => `<option value="${escapeHTML(actor.id)}" ${actor.id === selectedBodycam.targetActorID ? "selected" : ""}>${escapeHTML(actorTimelineName(project.scene.actors.indexOf(actor)))}</option>`).join("")}
+                </select>
+              </label>
+              <button id="cameraBodycamChest" class="secondary-button" type="button" ${canEdit && selectedKeyframe && bodycamTargetExists ? "" : "disabled"}>重置到胸前</button>
+              <p class="${bodycamTargetExists ? "" : "warning"}">${bodycamTargetExists ? "跟随躯干位置与朝向；调整构图后记录关键帧。手持效果继续生效。" : "绑定人物已不存在，请重新选择人物或关闭绑定。"}</p>
+            ` : ""}
+            ${selectedKeyframeIndex > 0 && selectedKeyframe.bodycam != null ? `<button id="cameraBodycamInherit" class="camera-inherit-button" type="button" ${canEdit ? "" : "disabled"}>恢复沿用上一关键帧</button>` : ""}
+          </div>
         </div>
     </section>
     <section class="inspector-section camera-inspector-section">
       ${orbitForm ? `<details id="cameraOrbitEditor" class="camera-orbit-editor ${orbitPreviewActive ? "previewing" : ""}" ${cameraOrbitExpanded || orbitPreviewActive ? "open" : ""}>
         <summary class="camera-orbit-heading">
-          <div><strong>环绕</strong><span>从 ${orbitForm.startTime.toFixed(2)} s 开始</span></div>
+          <div><strong>环绕</strong><span>${liveBodycam.enabled ? "关闭 Bodycam 后可生成环绕" : `从 ${orbitForm.startTime.toFixed(2)} s 开始`}</span></div>
           <span class="camera-orbit-scope">普通关键帧</span>
         </summary>
         <div class="camera-orbit-content">
@@ -9137,6 +9181,23 @@ function renderCameraInspector() {
   });
   document.getElementById("applyCameraOrbit")?.addEventListener("click", applyCameraOrbitPreview);
   document.getElementById("cancelCameraOrbit")?.addEventListener("click", () => cancelCameraOrbitPreview(true));
+  const commitBodycam = (bodycam, placement = "preserve") => {
+    if (!selectedKeyframe) return;
+    commitProject((current) => updateShotCameraKeyframeBodycam(current, shot.id, selectedKeyframe.id, bodycam, placement),
+      placement === "chest" ? "Bodycam 已重置到胸前" : "已更新身体绑定", { cameraEdit: true });
+  };
+  document.getElementById("cameraBodycamToggle")?.addEventListener("click", () => {
+    const targetActorID = bodycamTargetExists ? selectedBodycam.targetActorID
+      : bodycamActors.find((actor) => actor.id === selectedActorID)?.id || bodycamActors[0]?.id;
+    commitBodycam(selectedBodycam.enabled ? { enabled: false } : { enabled: true, targetActorID });
+  });
+  document.getElementById("cameraBodycamTarget")?.addEventListener("change", (event) => {
+    commitBodycam({ enabled: true, targetActorID: event.target.value });
+  });
+  document.getElementById("cameraBodycamChest")?.addEventListener("click", () => {
+    commitBodycam({ enabled: true, targetActorID: selectedBodycam.targetActorID }, "chest");
+  });
+  document.getElementById("cameraBodycamInherit")?.addEventListener("click", () => commitBodycam(null));
   const commitSelectedAim = (aim, message) => {
     if (!selectedKeyframe) return;
     cameraAimBaseProject = null;
@@ -9191,8 +9252,7 @@ function renderCameraInspector() {
       targetActorID,
       trackingResponse: nextMode === "look-at"
         && selectedAim.mode !== "look-at"
-        && selectedAim.trackingResponse <= 0
-        ? recommendedCameraAimTrackingResponse
+        ? 0
         : selectedAim.trackingResponse,
     };
     if (nextMode === "free") {
@@ -9410,7 +9470,7 @@ function renderCameraInspector() {
       return;
     }
     project = projectState.commit(updateShotCameraKeyframe(project, shot.id, selectedKeyframe.id, {
-      ...selectedKeyframe,
+      ...currentPose,
       position,
       focalLength,
       focusDistance,

@@ -10,6 +10,7 @@ import {
   sampleCameraTrack,
 } from "./camera-track.js";
 import { sampleProject } from "./playback-engine.js";
+import { applyCameraBodycam } from "./camera-bodycam.js";
 import { applyCameraFollow } from "./camera-follow.js";
 import { applyCameraHandheld } from "./camera-handheld.js";
 import { applyCameraFocusTracking, cameraFocusTargetPosition } from "./camera-focus-tracking.js";
@@ -60,6 +61,8 @@ export function applyShotCameraConstraints(
   const actorSamples = actorSamplesInput instanceof Map
     ? actorSamplesInput
     : sampleProject(project, elapsedInput);
+  const bodycamPose = applyCameraBodycam(project, shot, pose, elapsedInput, actorSamples);
+  if (bodycamPose) return bodycamPose;
   const followedPose = applyCameraFollow(project, shot, pose, elapsedInput, actorSamples);
   return applyCameraAim(project, shot, followedPose, elapsedInput, actorSamples);
 }

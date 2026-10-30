@@ -3979,24 +3979,39 @@ body.adjusting-path-height * {
   margin: 9px 0 0;
 }
 
-.facing-angle-row {
+.motion-fields {
   display: grid;
-  grid-template-columns: auto minmax(58px, 1fr) 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.motion-fields-top { margin-top: 9px; }
+
+.motion-field {
+  display: grid;
+  grid-template-columns: auto 76px;
+  justify-content: start;
   gap: 6px;
   align-items: center;
+  min-width: 0;
   color: var(--text-secondary);
   font-size: 10px;
 }
 
-.facing-mode-label {
-  color: var(--text-muted);
-  font-size: 10px;
-}
+.motion-field > span:first-child { white-space: nowrap; }
+.motion-field > .motion-number,
+.motion-field > select,
+.motion-field > .fs-select-trigger { width: 76px; min-width: 0; }
+.motion-field > select,
+.motion-field > .fs-select-trigger { height: 30px; font-size: 10px; padding-inline: 7px; }
+.motion-field .motion-number input { padding-right: 18px; }
+.motion-field .motion-speed-field input { padding-right: 28px; }
 
 .facing-command-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
+  margin-top: 3px;
 }
 
 
@@ -4017,9 +4032,9 @@ body.adjusting-path-height * {
 }
 
 .facing-command-row .compact-button {
-  width: 100%;
-  min-height: 30px;
-  padding-inline: 4px;
+  width: auto;
+  min-height: 26px;
+  padding-inline: 8px;
   white-space: nowrap;
 }
 
@@ -8418,3 +8433,6 @@ body > .app-shell { flex: 1; min-height: 0; height: auto; }
 
 .object-job-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .object-job-actions [hidden] { display: none; }
+
+.camera-bodycam-overrides { border: 0; padding: 0; margin: 0; min-width: 0; display: contents; }
+.camera-bodycam-overrides:disabled .camera-constraint-row { opacity: .48; }

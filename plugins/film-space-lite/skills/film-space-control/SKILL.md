@@ -40,3 +40,5 @@ UI 与 MCP 操作同一份 Lite 项目。旧 revision 必须重新读取后提�
 移动面向：add_move.options / update_motion_action.patch 的 facingMode 可选 path/inherit/fixed。inherit 保持进入时基准面向；fixed 必须给 facingY 世界弧度角。例后退击飞 add_move options={speed:2,facingMode:"inherit"}。rotationYOffset 继续叠加；Move 的位置偏移沿路径，Hold 沿停留朝向。
 
 可移动物体：使用 add_movable_object 创建组合几何，update_movable_object(id,patch) 修改已有外形。绑定聊天必须始终读取指定项目和物体 ID，不以默认项目替代。外形修改只写 name/description/primitives，保留运动、关键帧、整体变换和聊天绑定；用户明确要求运动修改时复用演员运动操作。+Z 为物体正前方，原点为整体运动锚点。物体帧只使用整体偏移和旋转，不写人物关节或站坐动作。用一个主视角、必要时一个侧视角检查结果。
+
+Move/Hold 入段转向：add_move、add_stay、insert_stay_before 的 options 和 update_motion_action.patch 可设 turnSeconds，0–3600 秒，默认 0.25，0 立即，实际裁至段长。与走位同时发生；姿态 transitionSeconds 独立。例：patch={turnSeconds:1.2}。

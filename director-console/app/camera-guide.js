@@ -1,3 +1,4 @@
+import { applyCameraBodycam, effectiveCameraBodycam } from "./camera-bodycam.js";
 import { applyCameraFollow } from "./camera-follow.js";
 import {
   cameraTrackEndpoints,
@@ -15,7 +16,8 @@ const guideSamplesPerSegment = 16;
 export function evaluatedCameraGuideTrack(project, shot) {
   const track = createCameraTrack(shot?.camera?.track);
   const hasFollow = track.keyframes.some((keyframe) => keyframe.follow?.enabled === true);
-  if (!hasFollow) {
+  const hasBodycam = track.keyframes.some((key) => key.bodycam?.enabled);
+  if (!hasFollow && !hasBodycam) {
     return {
       ...cameraTrackEndpoints(track),
       keyframes: track.keyframes,
@@ -31,13 +33,13 @@ export function evaluatedCameraGuideTrack(project, shot) {
   const pathPoses = compactGuidePath(times.map((time) => {
     const basePose = sampleCameraTrack(sourceTrack, Math.min(time, sourceDuration));
     return basePose
-      ? { time, ...applyCameraFollow(project, shot, basePose, time, sampleProject(project, time)) }
+      ? { time, ...(applyCameraBodycam(project, shot, basePose, time, sampleProject(project, time)) || applyCameraFollow(project, shot, basePose, time, sampleProject(project, time))) }
       : null;
   }).filter(Boolean));
   const keyframes = track.keyframes.map((keyframe) => ({
     id: keyframe.id,
     time: keyframe.time,
-    ...applyCameraFollow(project, shot, keyframe, keyframe.time, sampleProject(project, keyframe.time)),
+    ...(applyCameraBodycam(project, shot, keyframe, keyframe.time, sampleProject(project, keyframe.time)) || applyCameraFollow(project, shot, keyframe, keyframe.time, sampleProject(project, keyframe.time))),
   }));
   const start = pathPoses[0] || keyframes.find((keyframe) => keyframe.time === 0) || null;
   const last = pathPoses.at(-1) || keyframes.at(-1) || null;
@@ -47,6 +49,7 @@ export function evaluatedCameraGuideTrack(project, shot) {
 
 export function authoredCameraPositionFromGuide(project, shot, keyframe, visiblePosition) {
   if (!keyframe || !visiblePosition) return visiblePosition;
+  if (effectiveCameraBodycam(shot.camera.track, keyframe.time).enabled) return { ...visiblePosition };
   const followed = applyCameraFollow(
     project,
     shot,

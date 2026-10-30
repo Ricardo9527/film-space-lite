@@ -26,14 +26,19 @@ export function blockingPostureFields(action) {
 }
 
 export function moveFacingFields(action) {
+  const turnSeconds = action.turnSeconds;
+  if (turnSeconds !== undefined && (!Number.isFinite(turnSeconds) || turnSeconds < 0 || turnSeconds > 3600)) {
+    throw new Error("进入时转向时长必须为 0–3600 秒。");
+  }
+  const turnFields = turnSeconds === undefined ? {} : { turnSeconds };
   if (action.kind !== "move") {
     if (action.facingMode != null) throw new Error("移动面向模式只适用于 Move。");
-    return {};
+    return turnFields;
   }
   const facingMode = action.facingMode ?? "path";
   if (!["path", "inherit", "fixed"].includes(facingMode)) throw new Error("无效的移动面向模式。");
   if (facingMode === "fixed" && !Number.isFinite(action.facingY)) throw new Error("指定移动面向需要有效角度。");
-  return {facingMode};
+  return {facingMode, ...turnFields};
 }
 
 export function blockingHeadHeight(pose) {
@@ -128,8 +133,12 @@ export function compileBlockingPlayback(actor) {
 
 export function sampleBlockingPhase(phase, elapsed) {
   const progress = Math.min(1, elapsed / phase.duration);
-  const turn = Math.min(1, elapsed / Math.min(0.25, phase.duration));
+  const turnDuration = Math.min(phase.action.turnSeconds ?? 0.25, phase.duration);
+  const turn = turnDuration === 0 ? 1 : Math.min(1, elapsed / turnDuration);
   const smoothTurn = turn * turn * (3 - 2 * turn);
+  // Position offsets retain their existing path frame; facing timing only rotates the actor.
+  const pathTurn = Math.min(1, elapsed / Math.min(0.25, phase.duration));
+  const smoothPathTurn = pathTurn * pathTurn * (3 - 2 * pathTurn);
   const poseDuration=Math.min(phase.action.transitionSeconds ?? .25,phase.duration);
   const poseProgress=poseDuration===0?1:Math.min(1,elapsed/poseDuration);
   const poseBlend=poseProgress*poseProgress*(3-2*poseProgress);
@@ -140,7 +149,7 @@ export function sampleBlockingPhase(phase, elapsed) {
     rotationY: normalizeAngle(phase.startRotationY
       + normalizeAngle(phase.endRotationY - phase.startRotationY) * smoothTurn),
     pathRotationY: normalizeAngle(phase.startPathRotationY
-      + normalizeAngle(phase.endPathRotationY - phase.startPathRotationY) * smoothTurn),
+      + normalizeAngle(phase.endPathRotationY - phase.startPathRotationY) * smoothPathTurn),
     actionID: phase.action.actionID, actionKind: phase.kind,
     posture: phase.kind === "hold" ? phase.action.posture ?? "stand" : "stand",
     seatHeight: phase.action.seatHeight ?? blockingSeatHeight,
