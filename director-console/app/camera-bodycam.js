@@ -17,11 +17,17 @@ export function effectiveCameraBodycam(trackInput, elapsed = 0) {
   const end = keys[index + 1];
   const bodycam = start.bodycam;
   if (!bodycam.enabled || !end?.bodycam.enabled || end.bodycam.targetActorID !== bodycam.targetActorID) return bodycam;
-  // Sample local installation poses with the same camera interpolation rules.
+  // Local coordinates from another wearer or a disabled interval cannot
+  // contribute tangents to this installation's spline.
+  const sameBinding = (key) => key.bodycam.enabled && key.bodycam.targetActorID === bodycam.targetActorID;
+  let first = index;
+  let last = index + 1;
+  while (first > 0 && sameBinding(keys[first - 1])) first -= 1;
+  while (last + 1 < keys.length && sameBinding(keys[last + 1])) last += 1;
   const localTrack = {
     ...track,
-    keyframes: keys.map((key) => ({ ...key, position: key.bodycam.localPosition, quaternion: key.bodycam.localQuaternion })),
-    outTime: keys.at(-1).time,
+    keyframes: keys.slice(first, last + 1).map((key) => ({ ...key, position: key.bodycam.localPosition, quaternion: key.bodycam.localQuaternion })),
+    outTime: keys[last].time,
   };
   const pose = sampleCameraTrack(localTrack, elapsed);
   return { ...bodycam, localPosition: pose.position, localQuaternion: pose.quaternion };

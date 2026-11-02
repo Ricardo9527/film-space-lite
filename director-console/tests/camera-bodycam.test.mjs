@@ -9,6 +9,28 @@ import { applyCameraHandheld } from '../app/camera-handheld.js';
 const pose = {position:{x:2,y:1.7,z:5},quaternion:{x:0,y:0,z:0,w:1},focalLength:35};
 function fixture(){let p=addActor(createDesktopProject());return addShot(p,{cameraPose:pose});}
 const key=p=>findShot(p).camera.track.keyframes[0];
+const localKey=(id,time,targetActorID,x,enabled=true)=>({id,time,...pose,bodycam:{enabled,targetActorID,localPosition:{x,y:0,z:1},localQuaternion:{x:0,y:0,z:0,w:1}}});
+
+test('Bodycam interpolation isolates other wearers and disabled intervals',()=>{
+ for(const interpolation of ['smooth','linear','ease-in-out']){
+  for(const foreignX of [100,-100]){
+   const previous={interpolation,outTime:2,keyframes:[localKey('foreign',0,'B',foreignX),localKey('a',1,'A',0),localKey('b',2,'A',1)]};
+   near(effectiveCameraBodycam(previous,1.5).localPosition,{x:.5,y:0,z:1});
+   const disabled={interpolation,outTime:2,keyframes:[localKey('a',0,'A',0),localKey('b',1,'A',1),localKey('off',2,'A',foreignX,false)]};
+   near(effectiveCameraBodycam(disabled,.5).localPosition,{x:.5,y:0,z:1});
+   assert.equal(effectiveCameraBodycam(disabled,2).enabled,false);
+  }
+ }
+});
+
+test('continuous Bodycam bindings preserve their spline and inherit ordinary keys',()=>{
+ const keys=[localKey('a',0,'A',0),localKey('b',1,'A',1),localKey('c',2,'A',1.2)];
+ const track={interpolation:'smooth',outTime:2,keyframes:keys};
+ const original=effectiveCameraBodycam(track,.5);
+ const inherited=effectiveCameraBodycam({...track,keyframes:[keys[0],{id:'ordinary',time:.25,...pose},...keys.slice(1)]},.5);
+ near(inherited.localPosition,original.localPosition);
+ assert.notEqual(original.localPosition.x,.5,'same-wearer neighbouring keys still determine the smooth tangent');
+});
 function bind(p,placement='preserve'){return updateShotCameraKeyframeBodycam(p,findShot(p).id,key(p).id,{enabled:true,targetActorID:p.scene.actors[0].id},placement);}
 const sample=(p,t=0)=>sampleShotCamera(p,findShot(p),t);
 function near(a,b){for(const k of Object.keys(b))assert.ok(Math.abs(a[k]-b[k])<1e-6,`${k}: ${a[k]} != ${b[k]}`);}

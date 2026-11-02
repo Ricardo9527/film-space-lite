@@ -2395,6 +2395,10 @@ function renameSelectedShot(shotID, name) {
 }
 
 async function createNewProject(options = {}) {
+  if (isExporting()) {
+    showToast("请先完成或取消当前输出，再新建项目");
+    return;
+  }
   const skipCurrentSave = options?.skipCurrentSave === true;
   
   const settings = await requestNewProjectSettings();
@@ -2446,6 +2450,10 @@ async function createNewProject(options = {}) {
 async function loadProject(id, options = {}) {
   const skipCurrentSave = options?.skipCurrentSave === true;
   if (!id || id === project.id) return;
+  if (isExporting()) {
+    showToast("请先完成或取消当前输出，再切换项目");
+    return;
+  }
   
   stopActionInspection(false);
   if (playback.status !== "idle") playback.reset();
@@ -3408,10 +3416,15 @@ function ensureValidEditViewMode() {
 
 async function chooseProjectOutputFolder(showConfirmation = false) {
   if (isExporting()) return null;
+  const projectID = project.id;
   elements.chooseOutputFolder.disabled = true;
   try {
     const result = await projectAPI.chooseOutputFolder();
     if (!result?.folder) return null;
+    if (project.id !== projectID) {
+      showToast("项目已切换，已取消输出文件夹选择");
+      return null;
+    }
     await commitProject(
       (current) => setProjectOutputFolder(current, result.folder),
       showConfirmation ? "输出文件夹已更新" : null,
@@ -3488,18 +3501,29 @@ async function exportCurrentShotFrame() {
   }
   if (playback.status === "playing") playback.pause();
   const time = playback.elapsed;
-  const fileName = await requestFrameName(shot, time, project.output.frameRate);
+  const snapshot = structuredClone(project);
+  const resolution = selectedShotOutputResolution();
+  const contextIsCurrent = () => project.id === snapshot.id && findShot(project)?.id === shot.id;
+  const fileName = await requestFrameName(shot, time, snapshot.output.frameRate);
   if (!fileName) return;
-  let outputFolder = project.output.folder;
+  if (!contextIsCurrent()) {
+    showToast("项目或运镜已切换，已取消当前帧输出");
+    return;
+  }
+  let outputFolder = snapshot.output.folder;
   if (!outputFolder) outputFolder = await chooseProjectOutputFolder(false);
   if (!outputFolder) return;
-  const snapshot = structuredClone(project);
+  if (!contextIsCurrent()) {
+    showToast("项目或运镜已切换，已取消当前帧输出");
+    return;
+  }
+  snapshot.output.folder = outputFolder;
   exportState = { ...exportState, status: "preparing", taskID: null, completedFrames: 0,
     frameCount: 1, cancelRequested: false, error: null };
   renderCameraWorkspace();
   try {
     const result = await renderShotFrame({ renderer: directorRenderer, api: projectAPI, snapshot,
-      resolution: selectedShotOutputResolution(), time, fileName, cancelled: () => exportState.cancelRequested,
+      resolution, time, fileName, cancelled: () => exportState.cancelRequested,
       onSaving: () => { exportState.status = "saving-frame"; renderCameraWorkspace(); } });
     exportState = { ...exportState, status: "success", lastResult: result, error: null };
     showToast(`当前帧已导出：${result.fileName}`);
